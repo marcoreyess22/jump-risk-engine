@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+.impeccable/
+
+# Salida derivada: la regenera `python -m src.backtest` (~8 min).
+# Son 15 MB y no aportan nada que el código no reproduzca.
+data/walkforward.csv
+
+# Estado de la corrida diaria: local a cada instalación.
+data/estado_diario.json
+
+# Meta del tooling, ajeno al proyecto.
+skill-observations/

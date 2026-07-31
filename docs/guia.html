@@ -1,0 +1,669 @@
+<title>Guía del motor de riesgo con saltos</title>
+
+<style>
+  :root {
+    --paper:      #F2F5F7;
+    --surface:    #FFFFFF;
+    --surface-2:  #E7ECEF;
+    --ink:        #101E28;
+    --ink-soft:   #47606E;
+    --ink-faint:  #7C93A0;
+    --rule:       #CFD9DF;
+    --accent:     #17618F;
+    --accent-soft:#DCE9F2;
+    --jump:       #B4541C;
+    --verde:      #2E7248;
+    --ambar:      #97700B;
+    --rojo:       #A32E24;
+    --shadow:     0 1px 2px rgba(16,30,40,.06), 0 8px 24px rgba(16,30,40,.05);
+
+    --serif: Charter, "Bitstream Charter", "Iowan Old Style", "Source Serif Pro", Georgia, serif;
+    --mono:  ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+    --measure: 66ch;
+    --wide: 60rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper:      #0C1720;
+      --surface:    #12212C;
+      --surface-2:  #1A2E3B;
+      --ink:        #E4EDF2;
+      --ink-soft:   #A2B7C2;
+      --ink-faint:  #6E8794;
+      --rule:       #263B49;
+      --accent:     #5AA9DA;
+      --accent-soft:#16303F;
+      --jump:       #E08A50;
+      --verde:      #63B183;
+      --ambar:      #D2A63C;
+      --rojo:       #E0796C;
+      --shadow:     0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:#0C1720; --surface:#12212C; --surface-2:#1A2E3B;
+    --ink:#E4EDF2; --ink-soft:#A2B7C2; --ink-faint:#6E8794; --rule:#263B49;
+    --accent:#5AA9DA; --accent-soft:#16303F; --jump:#E08A50;
+    --verde:#63B183; --ambar:#D2A63C; --rojo:#E0796C;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+  }
+  :root[data-theme="light"] {
+    --paper:#F2F5F7; --surface:#FFFFFF; --surface-2:#E7ECEF;
+    --ink:#101E28; --ink-soft:#47606E; --ink-faint:#7C93A0; --rule:#CFD9DF;
+    --accent:#17618F; --accent-soft:#DCE9F2; --jump:#B4541C;
+    --verde:#2E7248; --ambar:#97700B; --rojo:#A32E24;
+    --shadow:0 1px 2px rgba(16,30,40,.06), 0 8px 24px rgba(16,30,40,.05);
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: var(--wide);
+    margin: 0 auto;
+    padding: 4rem 1.5rem 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3.5rem;
+  }
+  .prose { max-width: var(--measure); }
+  p, ul, ol { margin: 0 0 1rem; }
+  ul, ol { padding-left: 1.25rem; }
+  li { margin-bottom: .4rem; }
+  strong { font-weight: 700; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: .7rem;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 .75rem;
+  }
+
+  h1 {
+    font-size: clamp(2.1rem, 5vw, 3.1rem);
+    line-height: 1.08;
+    letter-spacing: -.02em;
+    text-wrap: balance;
+    margin: 0 0 1rem;
+    font-weight: 700;
+  }
+  h2 {
+    font-size: clamp(1.45rem, 3vw, 1.9rem);
+    line-height: 1.2;
+    letter-spacing: -.015em;
+    text-wrap: balance;
+    margin: 0 0 1.25rem;
+    padding-bottom: .6rem;
+    border-bottom: 2px solid var(--rule);
+  }
+  h3 {
+    font-size: 1.14rem;
+    letter-spacing: -.005em;
+    margin: 2rem 0 .6rem;
+    text-wrap: balance;
+  }
+  h3:first-child { margin-top: 0; }
+
+  .lede { font-size: 1.16rem; color: var(--ink-soft); }
+
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  code {
+    font-family: var(--mono);
+    font-size: .87em;
+    background: var(--surface-2);
+    padding: .1em .35em;
+    border-radius: 3px;
+  }
+
+  /* La salida de máquina se presenta como lo que es: una terminal.
+     Fondo oscuro fijo en ambos temas — es una decisión, no un descuido:
+     distingue semánticamente lo que imprime el programa de lo que escribo yo. */
+  .term {
+    --term-bg:  #0A1620;
+    --term-fg:  #C3D4DF;
+    --term-cmd: #7FC4EE;
+    --term-dim: #5C7484;
+    --term-hi:  #E8A06A;
+    background: var(--term-bg);
+    color: var(--term-fg);
+    /* Borde legible sobre ambos fondos: en tema oscuro el bloque casi iguala
+       al de la página, y sin él perdería la separación. */
+    border: 1px solid #2C4C5D;
+    border-radius: 4px;
+    overflow-x: auto;
+    box-shadow: var(--shadow);
+  }
+  .term pre {
+    font-family: var(--mono);
+    font-size: .8rem;
+    line-height: 1.65;
+    padding: 1.05rem 1.2rem;
+    margin: 0;
+    white-space: pre;
+    font-variant-numeric: tabular-nums;
+  }
+  .term .cmd { color: var(--term-cmd); font-weight: 600; }
+  .term .dim { color: var(--term-dim); }
+  .term .hi  { color: var(--term-hi); font-weight: 600; }
+
+  .tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: .85rem; }
+  th, td { padding: .55rem .8rem; text-align: left; border-bottom: 1px solid var(--rule); }
+  thead th {
+    font-family: var(--mono);
+    font-size: .68rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td code { background: none; padding: 0; color: var(--accent); }
+
+  /* Pipeline */
+  .pipe {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: .6rem;
+    counter-reset: stage;
+  }
+  .stage {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-top: 3px solid var(--accent);
+    border-radius: 4px;
+    padding: .9rem .85rem 1rem;
+    box-shadow: var(--shadow);
+    position: relative;
+  }
+  .stage::before {
+    counter-increment: stage;
+    content: counter(stage);
+    font-family: var(--mono);
+    font-size: .68rem;
+    color: var(--ink-faint);
+    display: block;
+    margin-bottom: .35rem;
+  }
+  .stage h4 { font-size: .95rem; margin: 0 0 .3rem; letter-spacing: -.01em; }
+  .stage p { font-size: .78rem; line-height: 1.45; color: var(--ink-soft); margin: 0; }
+  .stage .mod { font-family: var(--mono); font-size: .68rem; color: var(--accent); display: block; margin-top: .5rem; }
+  .stage:nth-child(4) { border-top-color: var(--jump); }
+  .stage:nth-child(4) .mod { color: var(--jump); }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1rem; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 1rem 1.1rem;
+    box-shadow: var(--shadow);
+  }
+  .card h4 { margin: 0 0 .4rem; font-size: .98rem; }
+  .card p { margin: 0; font-size: .85rem; color: var(--ink-soft); line-height: 1.5; }
+
+  /* El aviso se marca con su etiqueta, no con una barra de color. */
+  .note {
+    background: color-mix(in srgb, var(--jump) 7%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--jump) 26%, transparent);
+    padding: .95rem 1.15rem;
+    border-radius: 4px;
+    font-size: .92rem;
+    max-width: var(--measure);
+  }
+  .note p:last-child { margin-bottom: 0; }
+  .note .tag {
+    font-family: var(--mono);
+    font-size: .66rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--jump);
+    display: block;
+    margin-bottom: .35rem;
+  }
+
+  .math {
+    background: var(--accent-soft);
+    border-radius: 4px;
+    padding: 1rem 1.2rem;
+    font-family: var(--mono);
+    font-size: .86rem;
+    overflow-x: auto;
+    line-height: 1.9;
+  }
+
+  .toc { background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 1.1rem 1.3rem; box-shadow: var(--shadow); }
+  .toc ol { margin: 0; padding-left: 1.2rem; columns: 2; column-gap: 2rem; font-size: .9rem; }
+  .toc li { margin-bottom: .3rem; break-inside: avoid; }
+
+  .pill {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: .66rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    padding: .16em .5em;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .pill.v { background: color-mix(in srgb, var(--verde) 16%, transparent); color: var(--verde); }
+  .pill.a { background: color-mix(in srgb, var(--ambar) 18%, transparent); color: var(--ambar); }
+  .pill.r { background: color-mix(in srgb, var(--rojo) 15%, transparent); color: var(--rojo); }
+
+  hr.sep { border: 0; border-top: 1px solid var(--rule); margin: 0; }
+
+  @media (max-width: 800px) {
+    .pipe { grid-template-columns: 1fr 1fr; }
+    .toc ol { columns: 1; }
+  }
+  @media (max-width: 520px) {
+    body { font-size: 16px; }
+    .wrap { padding: 2.5rem 1.1rem 4rem; gap: 2.75rem; }
+    .pipe { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="prose">
+    <p class="eyebrow">Guía técnica · jump-risk-engine</p>
+    <h1>Motor de asignación y riesgo con saltos</h1>
+    <p class="lede">Cómo está construido, qué hace cada módulo y cómo correrlo tú mismo.
+    Un pipeline que va de precios crudos a un veredicto regulatorio, pasando por cálculo
+    estocástico, optimización convexa y pruebas de hipótesis.</p>
+  </header>
+
+  <nav class="toc prose" aria-label="Contenido">
+    <p class="eyebrow">Contenido</p>
+    <ol>
+      <li><a href="#pipeline">El pipeline</a></li>
+      <li><a href="#modelo">El modelo</a></li>
+      <li><a href="#correr">Cómo correrlo</a></li>
+      <li><a href="#modulos">Referencia de módulos</a></li>
+      <li><a href="#leer">Cómo leer la salida</a></li>
+      <li><a href="#extender">Cómo extenderlo</a></li>
+      <li><a href="#parametros">Parámetros que puedes tocar</a></li>
+    </ol>
+  </nav>
+
+  <hr class="sep">
+
+  <section id="pipeline">
+    <h2>El pipeline</h2>
+    <div class="prose">
+      <p>La idea central es que <strong>un solo generador de escenarios alimenta dos
+      consumidores distintos</strong>. Los mismos futuros simulados sirven para decidir cómo
+      repartir el capital y para medir cuánto se puede perder con ese reparto. Eso es lo que
+      hace que la comparación entre modelos sea limpia: nadie tiene información que otro no
+      tenga.</p>
+    </div>
+
+    <div class="pipe">
+      <div class="stage">
+        <h4>Datos</h4>
+        <p>Descarga una vez, cachea a disco, convierte a retornos logarítmicos. Después de
+        aquí nadie toca la red.</p>
+        <span class="mod">src/data.py</span>
+      </div>
+      <div class="stage">
+        <h4>Calibración</h4>
+        <p>Iguala los cumulantes en forma cerrada a la varianza, skew y kurtosis muestrales.
+        Sin optimizador frágil.</p>
+        <span class="mod">src/merton.py</span>
+      </div>
+      <div class="stage">
+        <h4>Escenarios</h4>
+        <p>20,000 futuros de un día para los 8 activos a la vez, acoplados por un salto
+        sistémico compartido.</p>
+        <span class="mod">src/merton.py</span>
+      </div>
+      <div class="stage">
+        <h4>Decisión</h4>
+        <p>Dos consumidores: el LP elige pesos, los 10 modelos miden la cola de esos pesos.</p>
+        <span class="mod">optimize.py · risk.py</span>
+      </div>
+      <div class="stage">
+        <h4>Validación</h4>
+        <p>Repite todo día a día sobre ventana rodante y somete las excepciones a cuatro
+        pruebas.</p>
+        <span class="mod">backtest.py · basel.py</span>
+      </div>
+    </div>
+
+    <div class="prose" style="margin-top:1.75rem">
+      <p>La pieza que lo hace extensible es el <strong>registro de modelos</strong>. Las diez
+      especificaciones de VaR comparten una firma única y viven en un diccionario; el bucle de
+      backtest itera sobre él sin conocer ninguna por nombre. Añadir un modelo es escribir una
+      función y una línea más, sin tocar nada del motor.</p>
+    </div>
+
+    <div class="math">modelo(rets, w, nivel, rng) &rarr; (VaR, ES)</div>
+  </section>
+
+  <hr class="sep">
+
+  <section id="modelo">
+    <h2>El modelo</h2>
+    <div class="prose">
+      <p>El precio no se mueve solo por difusión continua: de vez en cuando salta. La difusión
+      con saltos de Merton suma las dos cosas sobre el retorno logarítmico diario:</p>
+    </div>
+
+    <div class="math">X = m + σ·Z + Σ<sub>i=1..N</sub> Y<sub>i</sub>
+   con  N ~ Poisson(λ),  Y<sub>i</sub> ~ N(μ<sub>J</sub>, σ<sub>J</sub>²)</div>
+
+    <div class="prose">
+      <p>La parte gaussiana (<code>σ·Z</code>) es el ruido de todos los días. La suma de Poisson
+      es el salto: la mayoría de los días <code>N = 0</code> y no pasa nada, pero cuando ocurre
+      añade un choque de magnitud propia. Eso es lo que produce colas gordas — y los datos las
+      tienen: la kurtosis de exceso de los ocho activos va de 3.2 a 16.1, cuando una normal
+      valdría 0.</p>
+
+      <h3>Calibración sin optimizador</h3>
+      <p>Los cumulantes de este proceso tienen forma cerrada, así que en vez de una máxima
+      verosimilitud frágil se igualan directamente a los momentos muestrales:</p>
+    </div>
+
+    <div class="math">κ₂ = σ² + λ(μ<sub>J</sub>² + σ<sub>J</sub>²)
+κ₃ = λ(μ<sub>J</sub>³ + 3μ<sub>J</sub>σ<sub>J</sub>²)
+κ₄ = λ(μ<sub>J</sub>⁴ + 6μ<sub>J</sub>²σ<sub>J</sub>² + 3σ<sub>J</sub>⁴)</div>
+
+    <div class="note">
+      <span class="tag">Decisión de modelado declarada</span>
+      <p>Son <strong>cinco parámetros contra cuatro momentos</strong>: λ no queda identificada.
+      Distintos λ ajustan los mismos momentos igual de bien. Se fija en 0.05/día (12.6 saltos al
+      año) y se reporta la sensibilidad con <code>merton.sensibilidad_lambda()</code>. Cerrarla
+      exigiría el sexto cumulante muestral, que es ruido puro.</p>
+    </div>
+
+    <div class="prose">
+      <h3>El salto sistémico</h3>
+      <p>Si cada activo salta por su cuenta, los choques se promedian entre los ocho y la cola
+      de la cartera vuelve a parecer normal — medido: ES/VaR de 1.159 con saltos independientes
+      contra 1.162 del gaussiano. <strong>Las colas idiosincrásicas se diversifican.</strong></p>
+      <p>La solución es un único proceso de Poisson compartido por todos los activos. Y sale
+      gratis por un detalle de identificación: como λ es la misma en todos, compartir la cuenta
+      no altera ninguna marginal. Cada activo conserva su calibración exacta y solo cambia cómo
+      se acoplan. La correlación SPY–QQQ en el peor 1% de días pasa de −0.02 a +0.74.</p>
+    </div>
+  </section>
+
+  <hr class="sep">
+
+  <section id="correr">
+    <h2>Cómo correrlo</h2>
+    <div class="prose">
+      <p>Cada módulo es ejecutable por sí solo y muestra su propia salida. Empieza por los
+      rápidos para ver el motor funcionando antes de lanzar el backtest completo.</p>
+    </div>
+
+    <div class="term"><pre><span class="dim"># instalación, una vez</span>
+<span class="cmd">pip install -r requirements.txt</span>
+
+<span class="dim"># módulos rápidos — corre estos primero</span>
+<span class="cmd">python -m src.data</span>       <span class="dim">0.3 s   perfil de los 8 activos</span>
+<span class="cmd">python -m src.merton</span>     <span class="dim">0.4 s   calibración + sensibilidad a λ</span>
+<span class="cmd">python -m src.optimize</span>   <span class="dim">1.0 s   pesos de las 3 carteras</span>
+<span class="cmd">python -m src.risk</span>       <span class="dim">0.6 s   los 10 modelos sobre una ventana</span>
+
+<span class="dim"># los pesados</span>
+<span class="cmd">python tests/test_core.py</span> <span class="dim">~4 min  21 checks de validación</span>
+<span class="cmd">python -m src.backtest</span>    <span class="dim">~8 min  walk-forward, escribe walkforward.csv</span>
+
+<span class="dim"># requieren que backtest haya corrido antes</span>
+<span class="cmd">python -m src.basel</span>      <span class="dim">0.8 s   semáforo de capital y ES</span>
+<span class="cmd">python -m src.plots</span>      <span class="dim">        las 6 figuras a figures/</span>
+<span class="cmd">python -m src.diario --sembrar</span> <span class="dim">corrida diaria con estado</span></pre></div>
+
+    <div class="note">
+      <span class="tag">Orden importa</span>
+      <p><code>basel</code> y <code>plots</code> leen <code>data/walkforward.csv</code>, que
+      produce <code>backtest</code>. Si los corres antes, fallan por archivo inexistente.
+      Todo lo demás es independiente.</p>
+    </div>
+
+    <div class="prose">
+      <h3>Qué verás al correr <code>src.merton</code></h3>
+    </div>
+    <div class="term"><pre>λ = 0.05/día (12.6 saltos/año)
+
+     vol_dif_anual  salto_medio  salto_sd  %var_saltos
+SPY         0.1413      -0.0026    0.0383       <span class="hi">0.4819</span>
+QQQ         0.1796      -0.0035    0.0369       0.3488
+TLT         0.1319       0.0001    0.0204       0.2312
+DBC         0.1690      -0.0091    0.0250       0.2377</pre></div>
+    <div class="prose">
+      <p>La última columna es la que importa: entre 23% y 52% de la varianza vive en los saltos,
+      no en la difusión. Ese es el pedazo de riesgo que un modelo gaussiano borra por
+      construcción.</p>
+    </div>
+  </section>
+
+  <hr class="sep">
+
+  <section id="modulos">
+    <h2>Referencia de módulos</h2>
+
+    <h3>src/data.py — ingesta</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Función</th><th>Devuelve</th></tr></thead>
+      <tbody>
+        <tr><td><code>load_prices(refresh=False)</code></td><td>Precios ajustados. Usa el caché salvo que fuerces refresh.</td></tr>
+        <tr><td><code>log_returns(prices=None)</code></td><td>Retornos logarítmicos, sin NaN.</td></tr>
+        <tr><td><code>summary(rets=None)</code></td><td>Retorno y vol anualizados, skew y kurtosis de exceso por activo.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>src/merton.py — el proceso estocástico</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Función</th><th>Devuelve</th></tr></thead>
+      <tbody>
+        <tr><td><code>calibrar(r, lam)</code></td><td><code>ParamsMerton</code> por método de momentos. Levanta <code>ValueError</code> si λ es infactible.</td></tr>
+        <tr><td><code>calibrar_panel(rets, lam)</code></td><td>Tabla de parámetros para todos los activos.</td></tr>
+        <tr><td><code>cumulantes_teoricos(p)</code></td><td>Media, varianza, skew y kurtosis del modelo en forma cerrada. La base del check de calibración.</td></tr>
+        <tr><td><code>simular(p, n_dias, n_sim, rng)</code></td><td>Retornos simulados. Vectorizado: la suma de N normales es normal, así que no hay bucles.</td></tr>
+        <tr><td><code>simular_gbm(...)</code></td><td>Contrafactual gaussiano: misma media y varianza, sin tercer ni cuarto cumulante.</td></tr>
+        <tr><td><code>escenarios(rets, params, n_esc, rng, sistemico=True)</code></td><td>Matriz <code>(n_esc, 8)</code> de retornos conjuntos. La entrada del optimizador.</td></tr>
+        <tr><td><code>esperanza_precio(p, S0, n_dias)</code></td><td>E[S<sub>T</sub>] en forma cerrada, para el control de convergencia.</td></tr>
+        <tr><td><code>sensibilidad_lambda(r, lams)</code></td><td>Cómo cambian los parámetros al mover λ. Documenta la no identificación.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>src/optimize.py — asignación</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Función</th><th>Devuelve</th></tr></thead>
+      <tbody>
+        <tr><td><code>min_cvar(R, beta, ret_min=None)</code></td><td>Pesos, α y CVaR. α converge al VaR: el LP lo entrega de regalo.</td></tr>
+        <tr><td><code>min_varianza(Sigma, mu, ret_min)</code></td><td>Markowitz. Sin <code>ret_min</code>, mínima varianza global.</td></tr>
+        <tr><td><code>risk_parity(Sigma)</code></td><td>Contribución al riesgo igual. Formulación convexa de Spinu-Maillard.</td></tr>
+        <tr><td><code>contribuciones_riesgo(w, Sigma)</code></td><td>Reparto del riesgo por activo. Suman a σ<sub>p</sub> por Euler.</td></tr>
+        <tr><td><code>metricas(w, R, beta)</code></td><td>Retorno, vol, VaR y CVaR empíricos de una cartera.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>src/risk.py — los diez modelos</h3>
+    <div class="prose"><p>Todos comparten la firma <code>(rets, w, nivel, rng) → (VaR, ES)</code>
+    y devuelven <strong>pérdidas positivas</strong>, con ES ≥ VaR siempre.</p></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Modelo</th><th>Qué supone</th><th>Vol condicional</th></tr></thead>
+      <tbody>
+        <tr><td><code>historico</code></td><td>Nada. Percentil empírico de la ventana.</td><td>no</td></tr>
+        <tr><td><code>normal</code></td><td>Gaussiano, forma cerrada.</td><td>no</td></tr>
+        <tr><td><code>mc_gbm</code></td><td>Gaussiano multivariado por simulación.</td><td>no</td></tr>
+        <tr><td><code>mc_merton</code></td><td>Difusión con saltos y acoplamiento sistémico.</td><td>no</td></tr>
+        <tr><td><code>mc_merton_idio</code></td><td>Igual, pero con saltos independientes. Control.</td><td>no</td></tr>
+        <tr><td><code>t_student</code></td><td>Colas de ley de potencias, ν por máxima verosimilitud.</td><td>no</td></tr>
+        <tr><td><code>cornish_fisher</code></td><td>Corrige el cuantil normal por skew y kurtosis.</td><td>no</td></tr>
+        <tr><td><code>evt</code></td><td>Pareto generalizada sobre los excesos del percentil 95.</td><td>no</td></tr>
+        <tr><td><code>ewma</code></td><td>RiskMetrics: varianza que decae, colas gaussianas.</td><td><strong>sí</strong></td></tr>
+        <tr><td><code>fhs</code></td><td>Forma empírica de la cola + escala condicional de hoy.</td><td><strong>sí</strong></td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>src/backtest.py — validación</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Función</th><th>Qué prueba</th></tr></thead>
+      <tbody>
+        <tr><td><code>walk_forward(rets, ventana, nivel)</code></td><td>Una fila por (fecha, cartera, modelo) con VaR, ES, realizado y excepción.</td></tr>
+        <tr><td><code>kupiec_pof(exc, p)</code></td><td>¿La <em>frecuencia</em> de excepciones es la correcta? χ²(1)</td></tr>
+        <tr><td><code>christoffersen_ind(exc)</code></td><td>¿Están <em>independientes</em> en el tiempo? χ²(1)</td></tr>
+        <tr><td><code>christoffersen_cc(exc, p)</code></td><td>Las dos a la vez. χ²(2)</td></tr>
+        <tr><td><code>veredictos(df)</code></td><td>Tabla maestra con las tres pruebas por par (cartera, modelo).</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>src/basel.py — capital</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Función</th><th>Qué hace</th></tr></thead>
+      <tbody>
+        <tr><td><code>zona(n_excepciones)</code></td><td>Clasifica una ventana de 250 días y devuelve su multiplicador de capital.</td></tr>
+        <tr><td><code>resumen_capital(exc)</code></td><td>Reparto de ventanas por zona y multiplicador medio.</td></tr>
+        <tr><td><code>acerbi_szekely_z2(...)</code></td><td>Backtest del Expected Shortfall. Valor crítico por simulación.</td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="prose" style="margin-top:1.5rem">
+      <p>El semáforo, sobre 250 días hábiles y VaR al 99%:</p>
+    </div>
+    <div class="cards">
+      <div class="card"><h4><span class="pill v">Verde</span></h4><p>0 – 4 excepciones. Multiplicador de capital <strong>3.00</strong>.</p></div>
+      <div class="card"><h4><span class="pill a">Amarilla</span></h4><p>5 – 9 excepciones. Multiplicador de <strong>3.40 a 3.85</strong> según el conteo.</p></div>
+      <div class="card"><h4><span class="pill r">Roja</span></h4><p>10 o más. Multiplicador <strong>4.00</strong>, el tope.</p></div>
+    </div>
+  </section>
+
+  <hr class="sep">
+
+  <section id="leer">
+    <h2>Cómo leer la salida</h2>
+
+    <div class="prose">
+      <h3>La tabla de veredictos</h3>
+      <p>Es lo que produce <code>src.backtest</code>. Una fila por par cartera-modelo:</p>
+    </div>
+
+    <div class="term"><pre>    cartera         modelo  exc  esperadas  razon   Kupiec    Indep
+    min_var         normal   81      39.20   <span class="hi">2.06</span> REPRUEBA REPRUEBA
+    min_var      mc_merton   38      39.20   <span class="hi">0.97</span>     pasa REPRUEBA
+ igual_peso           ewma   84      39.20   2.14 REPRUEBA     <span class="hi">pasa</span></pre></div>
+
+    <div class="prose">
+      <p><strong>razon</strong> es excepciones observadas sobre esperadas. 1.0 es calibración
+      perfecta; por encima el modelo subestima el riesgo, por debajo lo sobreestima.</p>
+      <p><strong>Kupiec</strong> juzga la frecuencia. <strong>Indep</strong> juzga si las
+      excepciones se apelmazan. Un modelo puede acertar cuántas veces falla al año y fallar
+      todas en la misma semana — esa tercera línea es el único caso de 40 que pasa
+      independencia, y lo hace reprobando la frecuencia.</p>
+
+      <h3>Los dos ejes, y por qué ninguno los acierta ambos</h3>
+    </div>
+
+    <div class="tablewrap"><table>
+      <thead><tr><th>Modelo</th><th>Frecuencia</th><th>Persistencia π₁₁/π₀₁</th><th>Lectura</th></tr></thead>
+      <tbody>
+        <tr><td><code>ewma</code></td><td class="num">2.04 ✗</td><td class="num">3.6 ✓</td><td>Sabe cuándo, no cuánto</td></tr>
+        <tr><td><code>mc_merton</code></td><td class="num">0.96 ✓</td><td class="num">20.4 ✗</td><td>Sabe cuánto, no cuándo</td></tr>
+        <tr><td><code>fhs</code></td><td class="num">1.22 ✓</td><td class="num">7.5 ✓</td><td><strong>Lo único decente en ambos</strong></td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="prose" style="margin-top:1.25rem">
+      <p>La persistencia es cuánto se multiplica la probabilidad de excepción justo después de
+      una excepción. 1.0 sería no agrupamiento. Ninguno llega ni cerca, pero condicionar por
+      volatilidad la baja de 20 a 3.6.</p>
+    </div>
+
+    <div class="note">
+      <span class="tag">El resultado incómodo</span>
+      <p>Capital = multiplicador × VaR medio. El modelo que reprueba las cuatro pruebas cuesta
+      <strong>18.4% menos capital</strong> que el mejor calibrado. El multiplicador castiga como
+      máximo +33%, y subestimar el VaR ahorra ~20% directo. Con el doble de la tasa de
+      excepciones un modelo promedia 5.2 por ventana de 250 días — apenas la primera banda
+      amarilla. El semáforo tiene poca potencia en esa ventana.</p>
+    </div>
+  </section>
+
+  <hr class="sep">
+
+  <section id="extender">
+    <h2>Cómo extenderlo</h2>
+    <div class="prose">
+      <p>Añadir una especificación de VaR son dos pasos, y el motor no se entera. Escribe la
+      función con la firma del registro y regístrala:</p>
+    </div>
+
+    <div class="term"><pre><span class="dim"># en src/risk.py</span>
+
+<span class="cmd">def</span> mi_modelo(rets, w, nivel, rng=<span class="cmd">None</span>):
+    <span class="dim">"""rets: (T, n) ventana · w: (n,) pesos · devuelve (VaR, ES) positivos."""</span>
+    r = rets @ w                      <span class="dim"># agrega la cartera</span>
+    ...
+    <span class="cmd">return</span> <span class="cmd">float</span>(var), <span class="cmd">float</span>(es)   <span class="dim"># ES >= VaR siempre</span>
+
+REGISTRO = {
+    ...,
+    <span class="hi">"mi_modelo": mi_modelo,</span>
+}</pre></div>
+
+    <div class="prose">
+      <p>Eso es todo. <code>walk_forward</code> itera sobre <code>REGISTRO</code>, así que el
+      modelo nuevo entra al backtest, a las cuatro pruebas, al semáforo de Basilea y a las
+      figuras sin que toques ni una línea más.</p>
+      <p>Para añadir una <strong>cartera</strong>, el patrón es idéntico con el diccionario
+      <code>CARTERAS</code> de <code>backtest.py</code>: una función
+      <code>(ventana, rng) → pesos</code> y su entrada.</p>
+    </div>
+
+    <div class="note">
+      <span class="tag">Antes de confiar en tu modelo</span>
+      <p>Corre <code>python tests/test_core.py</code>. El check del día 11 recorre el registro
+      completo y verifica VaR positivo, ES ≥ VaR y monotonía en el nivel de confianza. Un error
+      de signo — el fallo más común al añadir especificaciones — salta ahí y no en el backtest
+      de ocho minutos.</p>
+    </div>
+  </section>
+
+  <hr class="sep">
+
+  <section id="parametros">
+    <h2>Parámetros que puedes tocar</h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Constante</th><th>Dónde</th><th>Valor</th><th>Qué cambia</th></tr></thead>
+      <tbody>
+        <tr><td><code>TICKERS</code></td><td>data.py</td><td class="num">8 ETF</td><td>El universo. Más activos alargan el walk-forward linealmente.</td></tr>
+        <tr><td><code>LAMBDA_DEFAULT</code></td><td>merton.py</td><td class="num">0.05</td><td>Intensidad de saltos. No identificada: súbela y la difusión se encoge.</td></tr>
+        <tr><td><code>VENTANA</code></td><td>backtest.py</td><td class="num">1000</td><td>Días de la ventana rodante. Más corta reacciona antes y estima peor.</td></tr>
+        <tr><td><code>NIVEL</code></td><td>backtest.py</td><td class="num">0.99</td><td>Confianza del VaR. Al 95% la cola tiene 5× más datos y todo converge mejor.</td></tr>
+        <tr><td><code>N_ESC</code></td><td>risk.py</td><td class="num">20 000</td><td>Escenarios por evaluación. Menos es más rápido y más ruidoso.</td></tr>
+        <tr><td><code>LAMBDA_EWMA</code></td><td>risk.py</td><td class="num">0.94</td><td>Decaimiento de RiskMetrics. Más bajo reacciona más rápido.</td></tr>
+        <tr><td><code>DIAS_VENTANA</code></td><td>basel.py</td><td class="num">250</td><td>Ventana del semáforo. Es la que fija el marco regulatorio.</td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="prose" style="margin-top:1.5rem">
+      <p>El cambio con más retorno por esfuerzo es <code>NIVEL</code>. Al 99% la cola tiene
+      ~39 excepciones esperadas en 3,900 días; al 95% tiene ~196, y las pruebas ganan potencia
+      de forma notable. Al 99% muchos veredictos viven cerca del límite estadístico.</p>
+    </div>
+  </section>
+
+</div>
