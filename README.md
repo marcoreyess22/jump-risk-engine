@@ -26,7 +26,8 @@ Basel capital traffic light.
 **Recommendation.** Adopt **`mc_merton`** as the risk specification. Of the ten it is the only
 one that gets both the *frequency* of extreme losses right (0.96×, the best calibrated) and
 their *magnitude* (passes the Expected Shortfall backtest in all 4 portfolios) — and magnitude
-is precisely what sets capital under Basel III.
+is what the current framework measures, since FRTB's Internal Models Approach is built on
+Expected Shortfall rather than VaR.
 
 Its weakness is real and worth stating: **it does not model volatility clustering**, so its
 exceptions bunch during crises. No model in the set solves all three axes; the ones that get
@@ -147,7 +148,7 @@ That limit is the question Act 2 opens: **does conditioning on volatility fix it
 Averaged over the 4 portfolios. `passes` counts tests cleared out of 16 (4 portfolios ×
 Kupiec, independence, conditional coverage, Acerbi–Székely).
 
-| model | ratio | persistence | ES (of 4) | multiplier | capital (k$/10M) | passes (of 16) |
+| model | ratio | persistence | ES (of 4) | multiplier | capital proxy (k$/10M) | passes (of 16) |
 |---|---|---|---|---|---|---|
 | `mc_merton` | **0.96** | 20.4 | **4** | 3.11 | 551 | **8** |
 | `t_student` | 1.08 | 12.1 | 3 | 3.11 | 550 | 7 |
@@ -180,15 +181,17 @@ in 2 of 4 portfolios (p = 0.006 and 0.021). The mechanism follows from its const
 rescales historical residuals by current volatility, so a jump landing during a calm stretch is
 measured with residuals standardized in calm and the severity comes out short.
 
-Merton is the exact inverse: it gets *how much* right and *when* wrong. Since regulatory capital
-under Basel III is set from ES, **magnitude outweighs timing**, which is why it is the
-recommendation despite its worse persistence.
+Merton is the exact inverse: it gets *how much* right and *when* wrong. Since FRTB's IMA is
+built on Expected Shortfall, **magnitude carries more weight than timing** for the metric the
+framework actually uses — which is why it is the recommendation despite its worse persistence.
 
 ### The inverted incentive
 
 ![incentive](figures/6_incentivo.png)
 
-Capital = multiplier × mean VaR, on $10M notional, minimum-variance portfolio:
+Capital **proxy** = mean multiplier × mean VaR × $10M notional, minimum-variance portfolio.
+This is a comparison yardstick under the *historical* Basel VaR traffic light, **not** a
+regulatory capital figure — see [Scope](#scope-and-limitations):
 
 ```
 mc_gbm         $389,062   +0.0%   ← fails Kupiec, CC, and ES
@@ -206,8 +209,8 @@ per 250-day window — barely the first amber band. **The traffic light has litt
 250-day window.**
 
 This is not a computational artifact: it is the documented critique of the Basel backtesting
-framework, and one reason Basel III (FRTB) moved the capital metric from VaR to ES while keeping
-qualitative approval requirements alongside the quantitative test.
+framework, and one reason FRTB moved the IMA capital metric from VaR to Expected Shortfall while
+keeping P&L attribution and qualitative approval requirements alongside the quantitative test.
 
 *This project's original hypothesis was that failing the backtest would raise capital costs. It
 turned out to be wrong in sign. Reported as it came out.*
@@ -262,6 +265,67 @@ exactly where the data is thinnest.
 
 ---
 
+## Scope and limitations
+
+**What this is.** A comparative study of VaR/ES specifications and portfolio allocation rules,
+validated out of sample. Its purpose is methodological: to measure how model choice changes
+measured risk, and to test every statistic before trusting it.
+
+**What this is not.** It does not estimate regulatory capital for any institution. The Basel
+traffic light reproduced in `src/basel.py` is the **historical** VaR-based backtesting table
+(Basel II / Basel 2.5), used here purely as a common yardstick, and every monetary figure is
+named `capital_proxy` for that reason. The current framework differs in ways this project does
+not implement:
+
+- FRTB's Internal Models Approach computes capital from **Expected Shortfall at 97.5%**, with
+  liquidity-horizon scaling and stressed-period calibration — not from 1-day VaR.
+- 1-day VaR backtesting survives under FRTB, but at *desk* level and paired with **P&L
+  attribution** tests comparing risk-theoretical against hypothetical P&L. Not implemented here.
+- Non-modellable risk factors, the standardised-approach floor, and supervisory add-ons are all
+  out of scope.
+
+Primary sources: [MAR32 — backtesting and P&L attribution](https://www.bis.org/basel_framework/chapter/MAR/32.htm)
+· [BCBS d457 — Minimum capital requirements for market risk](https://www.bis.org/bcbs/publ/d457.htm)
+
+**Statistical limitations that survive.** Bootstrap intervals on the exception ratio overlap
+heavily across the surviving models (`mc_merton` [0.59, 1.43] vs `fhs` [0.87, 1.76] on
+`min_var`): the data separates the Gaussian family from the rest, but **does not rank the
+survivors**. The point ordering in the tables above should be read as a summary, not as a
+significant result. Run `make scorecard` for the intervals.
+
+**λ does real work in the recommendation.** The bounded sensitivity grid (`make sensitivity`,
+3 λ × 3 windows on `min_var`) shows the gaussian-versus-jump ordering is robust — `normal` is
+never better than 1.85, `mc_merton` never worse than 1.82. But `mc_merton`'s *advantage* is not:
+at λ = 0.02 its ratio is 1.51–1.82, **behind both `fhs` and `historico`**. The declared choice of
+λ = 0.05 happens to be the best-calibrated one, and λ is precisely the parameter moments 2–4 do
+not identify. Read the recommendation as conditional on that modelling choice, not as a
+data-driven ranking.
+
+**The idiosyncratic counterfactual is not clean.** With independent jumps, D = Σ − J is not
+positive semi-definite and must be projected, which distorts the target covariance by ~19%
+(~28% in correlation). `mc_merton_idio` is a diagnostic of tail diversification, not a causal
+attribution. Run `make report` for the diagnostic.
+
+## References
+
+- Merton, R. C. (1976). *Option pricing when underlying stock returns are discontinuous.*
+  Journal of Financial Economics 3(1–2), 125–144.
+- Rockafellar, R. T., & Uryasev, S. (2000). *Optimization of Conditional Value-at-Risk.*
+  Journal of Risk 2(3), 21–41.
+- Kupiec, P. (1995). *Techniques for verifying the accuracy of risk measurement models.*
+  Journal of Derivatives 3(2), 73–84.
+- Christoffersen, P. (1998). *Evaluating interval forecasts.* International Economic Review
+  39(4), 841–862.
+- Acerbi, C., & Székely, B. (2014). *Backtesting Expected Shortfall.* Risk Magazine.
+- Maillard, S., Roncalli, T., & Teïletche, J. (2010). *The properties of equally weighted risk
+  contribution portfolios.* Journal of Portfolio Management 36(4), 60–70.
+- Basel Committee on Banking Supervision. *MAR32 — Internal models approach: backtesting and
+  P&L attribution.* https://www.bis.org/basel_framework/chapter/MAR/32.htm
+- Basel Committee on Banking Supervision (2019). *Minimum capital requirements for market
+  risk* (d457). https://www.bis.org/bcbs/publ/d457.htm
+
+---
+
 ## Reproducing
 
 ```bash
@@ -308,4 +372,4 @@ part of the work:
 |---|---|
 | The systemic jump makes the joint distribution elliptical, so min-CVaR coincides with minimum variance | False: the pure-mixture case gave the **largest** weight difference, not the smallest |
 | Min-CVaR reduces realized tail loss versus mean-variance | False: +0.1% CVaR and 4.8% worse drawdown, despite allocating 10 pp differently |
-| Failing the backtest raises regulatory capital | **Inverted**: the model that fails all four tests costs 18.4% less |
+| Failing the backtest raises the capital proxy | **Inverted**: the model that fails all four tests costs 18.4% less |

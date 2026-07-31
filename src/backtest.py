@@ -46,8 +46,11 @@ def kupiec_pof(exc: np.ndarray, p: float = 1 - NIVEL) -> dict:
     """
     exc = np.asarray(exc).astype(int)
     n, x = len(exc), int(exc.sum())
+    # Esquema constante pase lo que pase: una función que cambia sus claves
+    # según la entrada revienta río abajo justo cuando algo ya salió mal.
     if n == 0:
-        return {"n": 0, "x": 0, "LR": np.nan, "p_valor": np.nan}
+        return {"n": 0, "x": 0, "tasa": np.nan, "esperadas": 0.0,
+                "LR": np.nan, "p_valor": np.nan}
     p_hat = x / n
     lr = -2 * (_ll(x, n, p) - _ll(x, n, p_hat)) if 0 < p_hat < 1 else -2 * (_ll(x, n, p))
     return {"n": n, "x": x, "tasa": p_hat, "esperadas": n * p,
@@ -108,17 +111,34 @@ CARTERAS = {
 
 
 def walk_forward(rets: pd.DataFrame, ventana: int = VENTANA, nivel: float = NIVEL,
-                 semilla: int = 0, verbose: bool = True) -> pd.DataFrame:
-    """Una fila por (fecha, cartera, modelo) con VaR, ES y retorno realizado."""
+                 semilla: int = 0, verbose: bool = True,
+                 carteras: list[str] | None = None,
+                 modelos: list[str] | None = None,
+                 lam: float | None = None) -> pd.DataFrame:
+    """Una fila por (fecha, cartera, modelo) con VaR, ES y retorno realizado.
+
+    `carteras`, `modelos` y `lam` permiten correr un subconjunto: los estudios de
+    sensibilidad no necesitan el universo completo y con él serían inviables en
+    una laptop.
+    """
     idx, X, T = rets.index, rets.values, len(rets)
     rng = np.random.default_rng(semilla)
+    carteras_sel = {k: CARTERAS[k] for k in (carteras or CARTERAS)}
+    modelos_sel = {k: risk.REGISTRO[k] for k in (modelos or risk.REGISTRO)}
 
-    filas, w_act, mes_prev, n_reb = [], {}, None, 0
+    # λ es un parámetro del modelo, no del bucle: se inyecta por partial para no
+    # mutar estado global entre corridas de sensibilidad.
+    if lam is not None:
+        from functools import partial
+        modelos_sel = {k: (partial(v, lam=lam) if k == "mc_merton" else v)
+                       for k, v in modelos_sel.items()}
+
+    filas, w_act, mes_prev, n_reb, n_fallos = [], {}, None, 0, 0
     for t in range(ventana - 1, T - 1):
         win = X[t - ventana + 1 : t + 1]
         mes = (idx[t].year, idx[t].month)
         if mes != mes_prev:
-            for cn, cf in CARTERAS.items():
+            for cn, cf in carteras_sel.items():
                 w_act[cn] = cf(win, rng)
             mes_prev, n_reb = mes, n_reb + 1
             if verbose and n_reb % 24 == 0:
@@ -126,32 +146,57 @@ def walk_forward(rets: pd.DataFrame, ventana: int = VENTANA, nivel: float = NIVE
 
         for cn, w in w_act.items():
             realizado = float(X[t + 1] @ w)
-            for mn, mf in risk.REGISTRO.items():
-                var, es = mf(win, w, nivel, rng)
-                filas.append((idx[t + 1], cn, mn, var, es, realizado))
+            for mn, mf in modelos_sel.items():
+                # La trazabilidad del modelo es parte del resultado: si un
+                # modelo no puede calcularse, su fila queda marcada y con NaN,
+                # nunca rellenada por otro modelo.
+                try:
+                    var, es = mf(win, w, nivel, rng)
+                    estado = "ok"
+                except risk.CalibrationInfeasible as err:
+                    var, es, estado = np.nan, np.nan, f"calibracion_infactible: {err}"
+                    n_fallos += 1
+                filas.append((idx[t + 1], cn, mn, var, es, realizado, estado))
 
     df = pd.DataFrame(filas, columns=["fecha", "cartera", "modelo", "VaR", "ES",
-                                      "realizado"])
-    df["excepcion"] = (-df["realizado"] > df["VaR"]).astype(int)
+                                      "realizado", "estado_modelo"])
+    # Una fila sin VaR no puede declarar excepción: queda NaN, no 0. Contarla
+    # como "sin excepción" sesgaría a la baja el conteo del modelo que falló.
+    df["excepcion"] = np.where(df["VaR"].isna(), np.nan,
+                               (-df["realizado"] > df["VaR"]).astype(float))
     if verbose:
         print(f"  {n_reb} rebalanceos, {df.fecha.nunique():,} días evaluados")
+        if n_fallos:
+            print(f"  ⚠ {n_fallos} evaluaciones con calibración infactible "
+                  f"(marcadas en estado_modelo, VaR=NaN)")
+        else:
+            print("  estado_modelo: 'ok' en todas las filas")
     return df
 
 
 def veredictos(df: pd.DataFrame, nivel: float = NIVEL) -> pd.DataFrame:
-    """Tabla maestra: una fila por (cartera, modelo) con las tres pruebas."""
+    """Tabla maestra: una fila por (cartera, modelo) con las tres pruebas.
+
+    Las filas con estado_modelo distinto de 'ok' se excluyen del conteo y se
+    reportan en la columna `descartadas`: un veredicto calculado sobre filas
+    que el modelo no pudo producir no significa nada.
+    """
     p = 1 - nivel
     out = []
-    for (cn, mn), g in df.groupby(["cartera", "modelo"], sort=False):
+    estado = df.get("estado_modelo", pd.Series("ok", index=df.index))
+    for (cn, mn), g in df.assign(_estado=estado).groupby(["cartera", "modelo"],
+                                                         sort=False):
         g = g.sort_values("fecha")
-        e = g["excepcion"].values
+        n_desc = int((g["_estado"] != "ok").sum())
+        g = g[g["_estado"] == "ok"]
+        e = g["excepcion"].values.astype(int)
         pof, ind, cc = kupiec_pof(e, p), christoffersen_ind(e), christoffersen_cc(e, p)
         out.append({
             "cartera": cn, "modelo": mn,
             "n": pof["n"], "exc": pof["x"], "esperadas": round(pof["esperadas"], 1),
-            "razon": pof["x"] / pof["esperadas"],
+            "razon": pof["x"] / pof["esperadas"] if pof["esperadas"] else np.nan,
             "p_kupiec": pof["p_valor"], "p_ind": ind["p_valor"], "p_cc": cc["p_valor"],
-            "VaR_medio": g["VaR"].mean(),
+            "VaR_medio": g["VaR"].mean(), "descartadas": n_desc,
         })
     r = pd.DataFrame(out)
     for col, nombre in (("p_kupiec", "Kupiec"), ("p_ind", "Indep"), ("p_cc", "CC")):

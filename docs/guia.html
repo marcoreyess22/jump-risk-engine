@@ -535,7 +535,7 @@ DBC         0.1690      -0.0091    0.0250       0.2377</pre></div>
     <div class="tablewrap"><table>
       <thead><tr><th>Función</th><th>Qué hace</th></tr></thead>
       <tbody>
-        <tr><td><code>zona(n_excepciones)</code></td><td>Clasifica una ventana de 250 días y devuelve su multiplicador de capital.</td></tr>
+        <tr><td><code>zona(n_excepciones)</code></td><td>Clasifica una ventana de 250 días bajo el semáforo VaR <em>histórico</em> y devuelve su multiplicador.</td></tr>
         <tr><td><code>resumen_capital(exc)</code></td><td>Reparto de ventanas por zona y multiplicador medio.</td></tr>
         <tr><td><code>acerbi_szekely_z2(...)</code></td><td>Backtest del Expected Shortfall. Valor crítico por simulación.</td></tr>
       </tbody>
@@ -594,7 +594,7 @@ DBC         0.1690      -0.0091    0.0250       0.2377</pre></div>
 
     <div class="note">
       <span class="tag">El resultado incómodo</span>
-      <p>Capital = multiplicador × VaR medio. El modelo que reprueba las cuatro pruebas cuesta
+      <p><strong>Proxy</strong> de capital = multiplicador × VaR medio — una vara de comparación, no una cifra regulatoria. El modelo que reprueba las cuatro pruebas cuesta
       <strong>18.4% menos capital</strong> que el mejor calibrado. El multiplicador castiga como
       máximo +33%, y subestimar el VaR ahorra ~20% directo. Con el doble de la tasa de
       excepciones un modelo promedia 5.2 por ventana de 250 días — apenas la primera banda

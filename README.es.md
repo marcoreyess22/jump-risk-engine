@@ -25,8 +25,9 @@ semáforo de capital de Basilea.
 
 **Recomendación.** Adoptar **`mc_merton`** como especificación de riesgo. De las diez es la
 única que acierta a la vez la frecuencia de las pérdidas extremas (0.96×, la mejor calibrada) y
-su magnitud (pasa el backtest de Expected Shortfall en las 4 carteras) — y la magnitud es
-justamente lo que fija el capital bajo Basilea III.
+su magnitud (pasa el backtest de Expected Shortfall en las 4 carteras) — y la magnitud es lo que
+mide el marco vigente, ya que el IMA de FRTB se construye sobre Expected Shortfall y no sobre
+VaR.
 
 Su defecto es real y hay que decirlo: **no modela agrupamiento de volatilidad**, así que sus
 excepciones se apelmazan en crisis. Ningún modelo del conjunto resuelve los tres ejes; el que
@@ -149,7 +150,7 @@ Ese límite es la pregunta que abre el Acto 2: **¿condicionar por volatilidad l
 Promedio sobre las 4 carteras. `pasa` cuenta pruebas superadas de 16 (4 carteras × Kupiec,
 independencia, cobertura condicional y Acerbi-Székely).
 
-| modelo | razón | persistencia | ES (de 4) | multiplicador | capital (k$/10M) | pasa (de 16) |
+| modelo | razón | persistencia | ES (de 4) | multiplicador | proxy de capital (k$/10M) | pasa (de 16) |
 |---|---|---|---|---|---|---|
 | `mc_merton` | **0.96** | 20.4 | **4** | 3.11 | 551 | **8** |
 | `t_student` | 1.08 | 12.1 | 3 | 3.11 | 550 | 7 |
@@ -186,15 +187,17 @@ carteras (p = 0.006 y 0.021). El mecanismo es coherente con su construcción: re
 históricos por la volatilidad vigente, así que un salto que golpea durante un tramo de calma se
 mide con residuos estandarizados en calma y la severidad sale corta.
 
-Merton es el inverso exacto: acierta cuánto y no cuándo. Como el capital regulatorio bajo
-Basilea III se fija con el ES, **la magnitud pesa más que el momento**, y por eso es la
-recomendación pese a su peor persistencia.
+Merton es el inverso exacto: acierta cuánto y no cuándo. Como el IMA de FRTB se construye sobre
+Expected Shortfall, **la magnitud pesa más que el momento** para la métrica que el marco
+realmente usa, y por eso es la recomendación pese a su peor persistencia.
 
 ### El incentivo invertido
 
 ![incentivo](figures/6_incentivo.png)
 
-Capital = multiplicador × VaR medio, sobre $10M de nocional, cartera de mínima varianza:
+**Proxy** de capital = multiplicador medio × VaR medio × $10M de nocional, cartera de mínima
+varianza. Es una vara de comparación bajo el semáforo VaR *histórico* de Basilea, **no** una
+cifra de capital regulatorio — ver [Alcance y limitaciones](#alcance-y-limitaciones):
 
 ```
 mc_gbm         $389,062   +0.0%   ← reprueba Kupiec, CC y ES
@@ -212,8 +215,9 @@ modelo promedia 5.2 excepciones por ventana de 250 días — apenas la primera b
 semáforo tiene poca potencia en ventanas de 250 días.**
 
 Esto no es un artefacto del cálculo: es la crítica documentada al marco de backtesting de
-Basilea, y una de las razones por las que Basilea III (FRTB) trasladó la métrica de capital de
-VaR a ES y conserva requisitos cualitativos de aprobación además del test cuantitativo.
+Basilea, y una de las razones por las que FRTB trasladó la métrica de capital del IMA de VaR a
+Expected Shortfall y conserva atribución de P&L y requisitos cualitativos de aprobación además
+del test cuantitativo.
 
 *La hipótesis original de este proyecto era que reprobar el backtest encarecería el capital.
 Resultó incorrecta en el signo. Se reporta como salió.*
@@ -271,6 +275,67 @@ incorrecta al contrastarla, y quedó descartada.*
 
 ---
 
+## Alcance y limitaciones
+
+**Qué es.** Un estudio comparativo de especificaciones VaR/ES y reglas de asignación de
+cartera, validado fuera de muestra. Su propósito es metodológico: medir cuánto cambia el riesgo
+medido según el modelo elegido, y probar cada estadístico antes de confiar en él.
+
+**Qué no es.** No estima capital regulatorio de ninguna institución. El semáforo reproducido en
+`src/basel.py` es la tabla **histórica** de backtesting sobre VaR (Basilea II / 2.5), usada aquí
+solo como vara de comparación, y por eso toda cifra monetaria se llama `capital_proxy`. El marco
+vigente difiere en aspectos que este proyecto no implementa:
+
+- El IMA de FRTB calcula capital con **Expected Shortfall al 97.5%**, con escalado por horizonte
+  de liquidez y calibración a periodo estresado — no con VaR a un día.
+- El backtesting de VaR a un día sigue vigente bajo FRTB, pero a nivel de *mesa* y acompañado de
+  pruebas de **atribución de P&L** que comparan P&L teórico-de-riesgo contra hipotético. No
+  implementado aquí.
+- Factores de riesgo no modelizables, el piso del método estándar y los recargos supervisores
+  quedan fuera de alcance.
+
+Fuentes primarias: [MAR32 — backtesting and P&L attribution](https://www.bis.org/basel_framework/chapter/MAR/32.htm)
+· [BCBS d457 — Minimum capital requirements for market risk](https://www.bis.org/bcbs/publ/d457.htm)
+
+**Limitaciones estadísticas que permanecen.** Los intervalos bootstrap de la razón de
+excepciones se solapan mucho entre los modelos supervivientes (`mc_merton` [0.59, 1.43] contra
+`fhs` [0.87, 1.76] en `min_var`): los datos separan a la familia gaussiana del resto, pero **no
+ordenan a los supervivientes**. El orden puntual de las tablas anteriores es un resumen, no un
+resultado significativo. Corre `make scorecard` para ver los intervalos.
+
+**λ hace trabajo real en la recomendación.** La rejilla de sensibilidad acotada
+(`make sensitivity`, 3 λ × 3 ventanas sobre `min_var`) muestra que el orden gaussiano-contra-
+saltos es robusto: `normal` nunca es mejor que 1.85 y `mc_merton` nunca peor que 1.82. Pero la
+*ventaja* de `mc_merton` no lo es: con λ = 0.02 su razón es 1.51–1.82, **por detrás de `fhs` e
+`historico`**. La elección declarada de λ = 0.05 resulta ser la mejor calibrada, y λ es
+justamente el parámetro que los momentos 2-4 no identifican. La recomendación debe leerse como
+condicional a esa elección de modelado, no como un ranking dictado por los datos.
+
+**El contrafactual idiosincrático no es limpio.** Con saltos independientes, D = Σ − J no es
+semidefinida positiva y hay que proyectarla, lo que distorsiona la covarianza objetivo un ~19%
+(~28% en correlación). `mc_merton_idio` es un diagnóstico de diversificación de colas, no una
+atribución causal. Corre `make report` para verlo.
+
+## Referencias
+
+- Merton, R. C. (1976). *Option pricing when underlying stock returns are discontinuous.*
+  Journal of Financial Economics 3(1–2), 125–144.
+- Rockafellar, R. T., & Uryasev, S. (2000). *Optimization of Conditional Value-at-Risk.*
+  Journal of Risk 2(3), 21–41.
+- Kupiec, P. (1995). *Techniques for verifying the accuracy of risk measurement models.*
+  Journal of Derivatives 3(2), 73–84.
+- Christoffersen, P. (1998). *Evaluating interval forecasts.* International Economic Review
+  39(4), 841–862.
+- Acerbi, C., & Székely, B. (2014). *Backtesting Expected Shortfall.* Risk Magazine.
+- Maillard, S., Roncalli, T., & Teïletche, J. (2010). *The properties of equally weighted risk
+  contribution portfolios.* Journal of Portfolio Management 36(4), 60–70.
+- Basel Committee on Banking Supervision. *MAR32 — Internal models approach: backtesting and
+  P&L attribution.* https://www.bis.org/basel_framework/chapter/MAR/32.htm
+- Basel Committee on Banking Supervision (2019). *Minimum capital requirements for market
+  risk* (d457). https://www.bis.org/bcbs/publ/d457.htm
+
+---
+
 ## Reproducir
 
 ```bash
@@ -315,4 +380,4 @@ parte del trabajo:
 |---|---|
 | El salto sistémico vuelve elíptica la distribución conjunta, y por eso mín-CVaR coincide con mínima varianza | Falso: el caso de mezcla pura dio la **mayor** diferencia de pesos, no la menor |
 | Mín-CVaR reduce la cola realizada frente a media-varianza | Falso: +0.1% de CVaR y 4.8% peor drawdown, pese a asignar 10 pp distinto |
-| Reprobar el backtest encarece el capital regulatorio | **Invertido**: el modelo que reprueba las cuatro pruebas cuesta 18.4% menos |
+| Reprobar el backtest encarece el proxy de capital | **Invertido**: el modelo que reprueba las cuatro pruebas cuesta 18.4% menos |

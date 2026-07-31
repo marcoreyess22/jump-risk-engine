@@ -240,17 +240,69 @@ def cov_difusion(rets: pd.DataFrame, params: dict[str, ParamsMerton],
     los mismos elementos diagonales pero también fuera de la diagonal, así que lo
     que se resta tiene la forma de Σ y la resta sí es factible.
     """
-    D = np.cov(rets.values.T, ddof=1) - cov_saltos(rets, params, sistemico)
+    return diagnostico_covarianza(rets, params, sistemico)["D"]
+
+
+def diagnostico_covarianza(rets: pd.DataFrame, params: dict[str, ParamsMerton],
+                           sistemico: bool = True) -> dict:
+    """D = Σ − J con diagnóstico explícito de la proyección PSD.
+
+    Devuelve la matriz y las métricas que dicen si el modelo puede reproducir la
+    covarianza objetivo o no:
+
+      autovalor_min  el de D antes de proyectar; negativo ⇒ hubo proyección
+      proyectado     bool
+      err_cov_abs    máx |D_proyectada + J − Σ|, el error introducido
+      err_cov_rel    ese error relativo al máximo de |Σ|
+      err_corr_max   máximo error en correlación implícita
+
+    Importa porque el contrafactual idiosincrático depende de ello: si D no es
+    PSD hay que proyectarla, y la covarianza simulada deja de coincidir con la
+    empírica. Ocultarlo convertiría una comparación distorsionada en una
+    conclusión causal.
+    """
+    Sigma = np.cov(rets.values.T, ddof=1)
+    J = cov_saltos(rets, params, sistemico)
+    D = Sigma - J
     w, V = np.linalg.eigh(D)
-    if w.min() < -1e-12:
-        import warnings
-        warnings.warn(
-            f"D no es PSD (autovalor mínimo {w.min():.2e}); se recorta a 0. "
-            "Con sistemico=False es esperable: baja λ o usa saltos sistémicos.",
-            stacklevel=2,
-        )
+    autovalor_min = float(w.min())
+    proyectado = autovalor_min < -1e-12
+
+    if proyectado:
         D = V @ np.diag(np.clip(w, 0, None)) @ V.T
-    return D
+
+    total = D + J
+    err_abs = float(np.abs(total - Sigma).max())
+    d_emp = np.sqrt(np.diag(Sigma))
+    d_sim = np.sqrt(np.clip(np.diag(total), 1e-300, None))
+    corr_emp = Sigma / np.outer(d_emp, d_emp)
+    corr_sim = total / np.outer(d_sim, d_sim)
+
+    return {
+        "D": D,
+        "autovalor_min": autovalor_min,
+        "proyectado": proyectado,
+        "err_cov_abs": err_abs,
+        "err_cov_rel": float(err_abs / np.abs(Sigma).max()),
+        "err_corr_max": float(np.abs(corr_sim - corr_emp).max()),
+        "sistemico": sistemico,
+    }
+
+
+def reporte_psd(rets: pd.DataFrame, params: dict[str, ParamsMerton]) -> pd.DataFrame:
+    """Compara ambos regímenes de acoplamiento. Salida del `make report`."""
+    filas = []
+    for sis in (True, False):
+        d = diagnostico_covarianza(rets, params, sis)
+        filas.append({
+            "acoplamiento": "sistemico" if sis else "idiosincratico",
+            "autovalor_min": d["autovalor_min"],
+            "proyeccion_psd": d["proyectado"],
+            "err_cov_rel": d["err_cov_rel"],
+            "err_corr_max": d["err_corr_max"],
+            "contrafactual_limpio": not d["proyectado"],
+        })
+    return pd.DataFrame(filas)
 
 
 def escenarios(rets: pd.DataFrame, params: dict[str, ParamsMerton], n_esc: int,

@@ -1,0 +1,119 @@
+{
+  "proyecto": "jump-risk-engine",
+  "alcance": "Estudio comparativo de modelos VaR/ES fuera de muestra. No estima requerimientos de capital regulatorio.",
+  "cobertura_datos": {
+    "primer_dia": "2007-01-03",
+    "ultimo_dia": "2026-07-30",
+    "dias": 4924,
+    "activos": [
+      "SPY",
+      "QQQ",
+      "IWM",
+      "EFA",
+      "EEM",
+      "TLT",
+      "GLD",
+      "DBC"
+    ]
+  },
+  "parametros": {
+    "universo": [
+      "SPY",
+      "QQQ",
+      "IWM",
+      "EFA",
+      "EEM",
+      "TLT",
+      "GLD",
+      "DBC"
+    ],
+    "inicio_datos": "2007-01-01",
+    "lambda_saltos_por_dia": 0.05,
+    "lambda_saltos_por_anio": 12.600000000000001,
+    "ventana_dias": 1000,
+    "nivel_confianza": 0.99,
+    "escenarios_var": 20000,
+    "escenarios_optimizador": 20000,
+    "lambda_ewma": 0.94,
+    "ventana_semaforo_dias": 250,
+    "semilla_walk_forward": 0,
+    "modelos": [
+      "historico",
+      "normal",
+      "mc_gbm",
+      "mc_merton",
+      "mc_merton_idio",
+      "t_student",
+      "cornish_fisher",
+      "evt",
+      "ewma",
+      "fhs"
+    ],
+    "carteras": [
+      "min_cvar",
+      "min_var",
+      "risk_parity",
+      "igual_peso"
+    ],
+    "rebalanceo": "mensual",
+    "recalculo_var": "diario"
+  },
+  "entorno": {
+    "python": "3.13.13",
+    "plataforma": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+    "paquetes": {
+      "numpy": "2.5.1",
+      "pandas": "3.0.5",
+      "scipy": "1.18.0",
+      "matplotlib": "3.11.1",
+      "cvxpy": "1.9.2",
+      "yfinance": "1.5.2"
+    }
+  },
+  "hashes": {
+    "data/prices.csv": {
+      "sha256": "0f1c7534aed1afc5d431be99f5c0357243e7357905e60b74b40a8711689f71bd",
+      "bytes": 772040
+    },
+    "data/walkforward.csv": {
+      "sha256": "67fc08f499dec891b99e865121500c959cf37406a9c356db2ee7041457236d79",
+      "bytes": 14888538
+    },
+    "data/tabla_maestra.csv": {
+      "sha256": "066198c59cea24d50b9cbf291040c27cc62100e2d8c25c8628c427b9ebaaf8ce",
+      "bytes": 873
+    },
+    "src/data.py": {
+      "sha256": "b7743b4a4d9cba744f0cc906d3b3107e607be6ab8681b8f315012a23b584e485",
+      "bytes": 2039
+    },
+    "src/merton.py": {
+      "sha256": "83192250e3de34c591d73a40960eae0d18434aed5bd069561304f351fe0c3dc6",
+      "bytes": 14762
+    },
+    "src/optimize.py": {
+      "sha256": "73b67889fe2eaa1cd0afed1dd30439091bbbb3a5ff141b0c11647fae62dd6511",
+      "bytes": 5448
+    },
+    "src/risk.py": {
+      "sha256": "b971a9cc8da681aeef13968fa687e6386ab35ec5da413eedf730b01ce40c7b7b",
+      "bytes": 13467
+    },
+    "src/backtest.py": {
+      "sha256": "8d59aa9f6f1976667fee9fd6390f40c11bc511ac2991bda629fa95aa6ce37f32",
+      "bytes": 9625
+    },
+    "src/basel.py": {
+      "sha256": "1f22eaf3c4cc786609b94aed87c448f89db5023ebc0099638f71d00735dd2a0a",
+      "bytes": 7538
+    },
+    "src/plots.py": {
+      "sha256": "e6c2d124287ace2d4b7edf0b3f675bf9a2180b5fee59124d28e35a7bc638059f",
+      "bytes": 8193
+    },
+    "tests/test_core.py": {
+      "sha256": "463b5fae4f3639d96b4742a7d8418e209cd5c838cde589f44294222184470752",
+      "bytes": 32115
+    }
+  }
+}

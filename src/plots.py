@@ -156,8 +156,12 @@ def fig6_incentivo(t):
     ax.plot(xs, np.polyval(z, xs), "r--", lw=1.6,
             label=f"pendiente {z[0]:+.1f} mil USD por prueba superada")
     ax.set_xlabel("pruebas estadísticas superadas (de 16)")
-    ax.set_ylabel("capital regulatorio, miles de USD por $10M")
-    ax.set_title("El incentivo invertido: los modelos que reprueban cuestan menos capital")
+    ax.set_ylabel("proxy de capital, miles de USD por $10M")
+    ax.set_title("El incentivo invertido: los modelos que reprueban cuestan menos")
+    # La figura aparece en el README: el descargo viaja con ella, no solo en el texto.
+    fig.text(0.5, 0.005,
+             "Proxy bajo el semáforo VaR histórico (Basilea II/2.5). No es capital regulatorio.",
+             ha="center", fontsize=7.5, color="#666666")
     ax.legend(frameon=False)
     ax.grid(alpha=0.25)
     fig.tight_layout()

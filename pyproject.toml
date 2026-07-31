@@ -1,0 +1,31 @@
+[project]
+name = "jump-risk-engine"
+version = "1.0.0"
+description = "Walk-forward audit of VaR/ES specifications under a Merton jump-diffusion with systemic tail dependence"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Marco Antonio Reyes Minjárez" }]
+
+# PEP 604 unions (`X | None`) are used throughout the signatures, which is a
+# 3.10+ feature. Verified: the package fails to import on 3.9 with
+# "TypeError: unsupported operand type(s) for |: 'type' and 'NoneType'".
+requires-python = ">=3.10"
+
+dependencies = [
+  "numpy>=1.26,<3",
+  "pandas>=2.0,<4",
+  "scipy>=1.11,<2",
+  "matplotlib>=3.8,<4",
+  "cvxpy>=1.4,<2",
+]
+
+[project.optional-dependencies]
+# Only needed to refresh data/prices.csv. The cached CSV is versioned, so the
+# test suite and the full backtest run offline without this.
+data = ["yfinance>=0.2,<1"]
+
+[project.urls]
+Homepage = "https://github.com/marcoreyess/jump-risk-engine"
+
+[tool.setuptools]
+packages = ["src"]

@@ -91,33 +91,76 @@ def _calibrar_ventana(rets: np.ndarray, lam: float):
     return _CACHE_CALIB[clave]
 
 
+class CalibrationInfeasible(RuntimeError):
+    """Merton calibration failed on this window; no result can be labelled Merton.
+
+    Raised instead of silently substituting another model. A row labelled
+    `mc_merton` whose numbers came from `mc_gbm` would corrupt every
+    cross-model comparison in the backtest, and would do so invisibly.
+
+    `backtest.walk_forward` catches this and records `estado_modelo`; callers
+    that want an explicit fallback register `mc_merton_fallback_gbm`, which is a
+    different model with a different name.
+    """
+
+
 def mc_merton(rets, w, nivel, rng, sistemico=True, lam=merton.LAMBDA_DEFAULT):
     """Monte Carlo con jump-diffusion y salto sistémico.
 
     Calibra las marginales sobre la ventana, arma los escenarios conjuntos y
-    agrega. Si la calibración resulta infactible para esta ventana (λ demasiado
-    alta para su varianza), degrada a mc_gbm en vez de tumbar el backtest.
+    agrega.
+
+    Levanta CalibrationInfeasible si la calibración no es factible en esta
+    ventana. NO degrada en silencio: la trazabilidad del modelo es parte del
+    resultado. Verificado sobre todas las ventanas del histórico con λ=0.05,
+    nunca ocurre — la excepción protege configuraciones futuras.
     """
     import pandas as pd
 
     try:
         params = _calibrar_ventana(rets, lam)
     except ValueError as err:
-        # Sustituir un modelo por otro a mitad de un backtest corrompe la
-        # comparación entre modelos. Nunca ocurre con este universo y λ=0.05
-        # (verificado sobre todas las ventanas), pero si ocurriera tiene que
-        # verse: un aviso, no una sustitución muda.
-        import warnings
-        warnings.warn(f"mc_merton degradó a mc_gbm en esta ventana: {err}", stacklevel=2)
-        return mc_gbm(rets, w, nivel, rng)
+        raise CalibrationInfeasible(
+            f"calibración de Merton infactible con λ={lam} en esta ventana "
+            f"({rets.shape[0]} días × {rets.shape[1]} activos): {err}"
+        ) from err
 
     esc = merton.escenarios(pd.DataFrame(rets), params, N_ESC, rng, sistemico=sistemico)
     return _var_es_empirico(esc @ w, nivel)
 
 
 def mc_merton_idio(rets, w, nivel, rng):
-    """Merton con saltos independientes. Aísla cuánto aporta el salto sistémico."""
+    """Merton con saltos independientes. Diagnóstico del salto sistémico.
+
+    ADVERTENCIA METODOLÓGICA — no es un contrafactual limpio. Con saltos
+    independientes la covarianza de saltos es diagonal, y restarle una diagonal
+    grande a una Σ dominada por un factor común la vuelve indefinida. La
+    proyección PSD que lo corrige distorsiona la covarianza objetivo: sobre este
+    universo el error es del ~19% del máximo de Σ, contra ~1e-18 en el caso
+    sistémico. Ver merton.diagnostico_covarianza().
+
+    Sirve para mostrar que las colas idiosincrásicas se diversifican; no para
+    atribuir causalmente la diferencia solo al acoplamiento de los saltos.
+    """
     return mc_merton(rets, w, nivel, rng, sistemico=False)
+
+
+def mc_merton_fallback_gbm(rets, w, nivel, rng):
+    """Merton con degradación EXPLÍCITA a GBM si la calibración falla.
+
+    OPT-IN: no está en REGISTRO por defecto, a propósito. Sobre este universo la
+    calibración nunca falla, así que produciría una columna idéntica a
+    mc_merton y solo añadiría ruido a las tablas. Está aquí para quien priorice
+    robustez operativa sobre pureza del modelo, y para dejar constancia de que
+    el fallback es un MODELO DISTINTO CON NOMBRE DISTINTO — nunca un mc_merton
+    disfrazado.
+
+        risk.REGISTRO["mc_merton_fallback_gbm"] = risk.mc_merton_fallback_gbm
+    """
+    try:
+        return mc_merton(rets, w, nivel, rng)
+    except CalibrationInfeasible:
+        return mc_gbm(rets, w, nivel, rng)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

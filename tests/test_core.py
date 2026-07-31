@@ -604,6 +604,138 @@ def test_acerbi_szekely_tiene_potencia():
     print("  OK  ES < VaR levanta ValueError en vez de degenerar el nulo")
 
 
+def test_auditoria_b_merton_nunca_degrada_en_silencio():
+    """Una fila etiquetada mc_merton jamás puede venir de mc_gbm sin marca.
+
+    El fallback silencioso corrompería toda comparación entre modelos y lo haría
+    de forma invisible. Se verifica que la excepción se levante, que el
+    walk-forward la registre en estado_modelo con VaR NaN, y que el modelo con
+    fallback explícito sea una entrada DISTINTA del registro.
+    """
+    rets = data.log_returns()
+    ventana = rets.values[-1000:]
+    w = np.full(8, 1 / 8)
+    rng = np.random.default_rng(0)
+
+    # λ infactible ⇒ excepción tipada, nunca un número de otro modelo.
+    try:
+        risk.mc_merton(ventana, w, 0.99, rng, lam=50.0)
+        raise AssertionError("mc_merton no levantó CalibrationInfeasible")
+    except risk.CalibrationInfeasible as err:
+        assert "infactible" in str(err) and "50.0" in str(err), str(err)
+
+    # El fallback explícito sí devuelve número, y es otro modelo con otro nombre.
+    v, e = risk.mc_merton_fallback_gbm(ventana, w, 0.99, rng)
+    assert np.isfinite(v) and e >= v
+    assert "mc_merton_fallback_gbm" not in risk.REGISTRO, \
+        "el fallback no debe estar en el registro por defecto"
+
+    # El walk-forward marca la fila en vez de rellenarla con otro modelo.
+    sub = rets.iloc[-260:]
+    df = bt.walk_forward(sub, ventana=250, carteras=["igual_peso"],
+                         modelos=["mc_merton"], lam=50.0, verbose=False)
+    assert len(df), "el walk-forward no produjo filas"
+    assert (df.estado_modelo != "ok").all(), df.estado_modelo.unique()[:2]
+    assert df.VaR.isna().all(), "una fila fallida no puede traer VaR"
+    assert df.excepcion.isna().all(), "una fila sin VaR no puede declarar excepción"
+
+    v = bt.veredictos(df)
+    assert (v.descartadas > 0).all(), "veredictos no reportó las filas descartadas"
+
+    print(f"  OK  CalibrationInfeasible se levanta; {len(df)} filas marcadas con "
+          "VaR NaN y excepción NaN")
+    print("  OK  el fallback explícito es una entrada distinta, fuera del registro")
+
+
+def test_auditoria_c_diagnostico_psd():
+    """El contrafactual idiosincrático declara su propia distorsión.
+
+    Con saltos independientes, D = Σ − J no es PSD y hay que proyectarla, lo que
+    rompe la reproducción de la covarianza objetivo. Eso tiene que salir en el
+    diagnóstico, no en un warning que nadie lee.
+    """
+    rets = data.log_returns()
+    params = {c: merton.calibrar(rets[c].values) for c in rets.columns}
+
+    sis = merton.diagnostico_covarianza(rets, params, sistemico=True)
+    idi = merton.diagnostico_covarianza(rets, params, sistemico=False)
+
+    # Sistémico: sin proyección y covarianza exacta.
+    assert not sis["proyectado"], sis["autovalor_min"]
+    assert sis["err_cov_rel"] < 1e-10, sis["err_cov_rel"]
+    assert sis["err_corr_max"] < 1e-10, sis["err_corr_max"]
+
+    # Idiosincrático: proyecta, y el error es material — no un detalle numérico.
+    assert idi["proyectado"], "se esperaba proyección PSD con saltos independientes"
+    assert idi["autovalor_min"] < 0
+    assert idi["err_cov_rel"] > 0.01, idi["err_cov_rel"]
+
+    rep = merton.reporte_psd(rets, params)
+    assert set(rep.columns) >= {"autovalor_min", "proyeccion_psd", "err_cov_rel",
+                                "contrafactual_limpio"}
+    assert rep.set_index("acoplamiento").loc["sistemico", "contrafactual_limpio"]
+    assert not rep.set_index("acoplamiento").loc["idiosincratico", "contrafactual_limpio"]
+
+    # La advertencia metodológica tiene que estar escrita donde se lee.
+    assert "no es un contrafactual limpio" in risk.mc_merton_idio.__doc__.lower()
+
+    print(f"  OK  sistémico: sin proyección, err cov {sis['err_cov_rel']:.1e}")
+    print(f"  OK  idiosincrático: proyecta (autovalor {idi['autovalor_min']:.1e}), "
+          f"err cov {idi['err_cov_rel']:.1%}, err corr {idi['err_corr_max']:.1%}")
+
+
+def test_auditoria_a_alcance_regulatorio():
+    """basel.py no puede presentarse como cálculo regulatorio vigente."""
+    from src import basel
+
+    # Se normalizan los espacios: la aserción es sobre el contenido, no sobre
+    # dónde caiga el ajuste de línea.
+    doc = " ".join(basel.__doc__.lower().split())
+    for termino in ("educational", "not a regulatory", "not an frtb",
+                    "expected shortfall", "bis.org"):
+        assert termino in doc, f"falta '{termino}' en el docstring de alcance"
+
+    assert "no es un cálculo de capital regulatorio" in basel.DESCARGO.lower()
+    assert "frtb" in basel.DESCARGO.lower()
+
+    # La métrica monetaria se llama proxy, no capital a secas.
+    assert hasattr(basel, "capital_proxy")
+    assert "not a regulatory capital requirement" in basel.capital_proxy.__doc__.lower()
+
+    val = basel.capital_proxy(np.zeros(500), 0.015)
+    assert np.isclose(val, 3.00 * 0.015 * 10e6), val
+
+    print("  OK  alcance declarado: educativo, no FRTB, con fuentes BIS")
+    print(f"  OK  capital_proxy nombrado como proxy y coherente ({val:,.0f})")
+
+
+def test_auditoria_d_reproducibilidad():
+    """El manifiesto refleja el estado real del repositorio."""
+    import json
+    from pathlib import Path
+
+    from src import provenance
+
+    m = provenance.manifiesto()
+    assert m["parametros"]["ventana_dias"] == bt.VENTANA
+    assert m["parametros"]["nivel_confianza"] == bt.NIVEL
+    assert m["parametros"]["modelos"] == list(risk.REGISTRO)
+    assert m["cobertura_datos"]["dias"] > 4000
+    assert m["hashes"]["data/prices.csv"]["sha256"], "sin hash de precios"
+    assert "no estima requerimientos de capital" in m["alcance"].lower()
+
+    raiz = Path(__file__).resolve().parents[1]
+    py = (raiz / "pyproject.toml").read_text()
+    assert 'requires-python = ">=3.10"' in py, "pyproject sin requires-python"
+
+    if provenance.MANIFIESTO.exists():
+        difs = provenance.comparar(m, json.loads(provenance.MANIFIESTO.read_text()))
+        assert not difs, f"el manifiesto guardado no coincide: {difs[:3]}"
+
+    print(f"  OK  manifiesto con {len(m['hashes'])} hashes, parámetros leídos del código")
+    print("  OK  pyproject declara requires-python >= 3.10")
+
+
 if __name__ == "__main__":
     fallos = 0
     for nombre, fn in sorted(globals().items()):

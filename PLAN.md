@@ -91,7 +91,30 @@ independencia. Tras una excepción la probabilidad se multiplica por 16.4×. Nin
 tiene volatilidad variable en el tiempo — y EWMA y FHS del día 11 sí. La pregunta del Acto 2
 pasa a ser si condicionar por volatilidad arregla la independencia.
 
-### Auditoría final ✅ — 6 hallazgos aplicados
+### Auditoría externa ✅ — endurecimiento para publicación
+
+Seis bloques de hallazgos posteriores a la auditoría interna, orientados a que el repositorio
+sea público, reproducible y defendible.
+
+| Bloque | Problema | Resolución |
+|---|---|---|
+| **A. Alcance regulatorio** | `basel.py` podía leerse como cálculo de capital vigente. No lo es: FRTB calcula el IMA con Expected Shortfall al 97.5%, no con VaR | Módulo redocumentado como **simulación educativa del semáforo VaR histórico** (Basilea II/2.5). `capital` → `capital_proxy` con docstring que niega interpretación regulatoria. Fuentes BIS (MAR32, d457) en módulo y README. Sección "Alcance y limitaciones" en ambos READMEs |
+| **B. Trazabilidad Merton** | `mc_merton` degradaba a GBM en silencio: una fila etiquetada Merton podía traer números de otro modelo | `CalibrationInfeasible` tipada, sin fallback. `walk_forward` la captura y registra `estado_modelo` con VaR y excepción en NaN. `veredictos` excluye y reporta `descartadas`. `mc_merton_fallback_gbm` existe como **modelo distinto**, opt-in, fuera del registro |
+| **C. Contrafactual idiosincrático** | La proyección PSD distorsiona la covarianza objetivo y el contrafactual no era limpio | `diagnostico_covarianza()` y `reporte_psd()` cuantifican autovalor mínimo, error de covarianza y de correlación. **Medido: 19.4% y 27.8% de error en el caso idiosincrático, contra ~1e-16 en el sistémico.** Advertencia metodológica en el docstring de `mc_merton_idio` |
+| **D. Reproducibilidad** | Sin versiones fijadas ni Python mínimo; fallaba en 3.9 | `pyproject.toml` con `requires-python = ">=3.10"` (verificado: PEP 604 rompe en 3.9) y rangos de dependencias. `Makefile`, CI en 3.11 y 3.13, y `src/provenance.py` con manifiesto SHA-256, fecha de corte, parámetros leídos del código, semilla y versiones |
+| **E. Rigor estadístico** | Ranking puntual sin medida de incertidumbre | `src/scorecard.py`: bootstrap **por bloques de 20 días** (las excepciones se apelmazan; un bootstrap iid daría intervalos falsamente estrechos) y scorecard con cuatro criterios declarados. `src/sensitivity.py`: rejilla acotada λ × ventana sobre una cartera y cuatro modelos |
+| **F. Posicionamiento** | Faltaban alcance, referencias y resumen de CV | Sección de alcance, ocho referencias formales, y `docs/cv_project_summary.md` |
+
+**El hallazgo de E que más cambia la lectura:** los intervalos bootstrap se solapan masivamente
+entre los supervivientes — `mc_merton` [0.59, 1.43] contra `fhs` [0.87, 1.76] en `min_var`. Los
+datos separan a la familia gaussiana del resto, pero **no ordenan a los supervivientes**. El
+ranking puntual es un resumen, no un resultado significativo, y así se declara en el README.
+
+**Bug encontrado por una prueba nueva:** `kupiec_pof` devolvía un esquema de claves distinto con
+entrada vacía, y `veredictos` reventaba con `KeyError` si un modelo tenía todas sus filas
+descartadas. Esquema constante y guarda de división.
+
+### Auditoría interna previa ✅ — 6 hallazgos aplicados
 
 | Severidad | Hallazgo | Corrección |
 |---|---|---|
