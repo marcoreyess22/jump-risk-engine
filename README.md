@@ -6,7 +6,7 @@
 
 **Less. That's the problem.**
 
-An audit of **10 VaR/ES specifications × 4 portfolios** across 8 asset classes and 3,923
+An audit of **12 VaR/ES specifications × 4 portfolios** across 8 asset classes and 3,923
 out-of-sample days (2011–2026), validated with Kupiec, Christoffersen, Acerbi–Székely, and the
 Basel capital traffic light.
 
@@ -32,9 +32,12 @@ is what the current framework measures, since FRTB's Internal Models Approach is
 Expected Shortfall rather than VaR.
 
 Its weakness is real and worth stating: **it does not model volatility clustering**, so its
-exceptions bunch during crises. No model in the set solves all three axes; the ones that get
-the timing right (`ewma`, `fhs`) fail the magnitude. **The obvious extension — not built here —
-is to couple Merton marginals to an EWMA-style conditional scale.**
+exceptions bunch during crises. That extension has since been built — see
+[Act 3](#act-3--closing-the-gap-the-project-left-open). `mc_merton_ewma` halves the clustering
+and keeps the perfect ES record at a lower capital multiplier, but turns systematically
+conservative on frequency (0.72× against 0.94×). The two tie at 8/16 and neither dominates:
+**no model in the set solves all three axes.** Pick `mc_merton` if frequency accuracy matters
+most, `mc_merton_ewma` if clustering does.
 
 And do not treat the Basel traffic light as a sufficient approval criterion: on this data it
 **economically rewards the models it fails**. The practical conclusion is not to tune the model
@@ -98,15 +101,16 @@ that pair) and power now rises with severity: 1/60 under H₀, 12/60 on t(6) dat
 | Model | Exceptions | Observed/expected | Kupiec |
 |---|---|---|---|
 | `normal` | 81 | **2.06×** | FAIL |
-| `mc_gbm` | 81 | **2.06×** | FAIL |
+| `mc_gbm` | 84 | **2.14×** | FAIL |
 | `historico` | 52 | 1.33× | pass |
 | `mc_merton` | 38 | **0.97×** | pass |
 
 *(minimum-variance portfolio; the pattern repeats across all four — see
 [figure 3](figures/3_razon_excepciones.png))*
 
-`normal` and `mc_gbm` agree almost exactly, as they must: the same assumption reached two ways,
-one closed-form and one by simulation. Their convergence is a cross-check nobody designed.
+`normal` and `mc_gbm` land within simulation noise of each other (81 vs 84), as they must: the
+same assumption reached two ways, one closed-form and one by Monte Carlo. Their agreement is a
+cross-check nobody designed.
 
 ### 2. Idiosyncratic tails diversify away; systemic ones do not
 
@@ -145,23 +149,25 @@ That limit is the question Act 2 opens: **does conditioning on volatility fix it
 
 ---
 
-## Act 2 — auditing all ten specifications
+## Act 2 — auditing the ten unconditional-and-filtered specifications
 
 Averaged over the 4 portfolios. `passes` counts tests cleared out of 16 (4 portfolios ×
 Kupiec, independence, conditional coverage, Acerbi–Székely).
 
 | model | ratio | persistence | ES (of 4) | multiplier | capital proxy (k$/10M) | passes (of 16) |
 |---|---|---|---|---|---|---|
-| `mc_merton` | **0.96** | 20.4 | **4** | 3.11 | 551 | **8** |
-| `t_student` | 1.08 | 12.1 | 3 | 3.11 | 550 | 7 |
-| `historico` | 1.20 | 12.5 | 2 | 3.12 | 518 | 6 |
-| `cornish_fisher` | 0.68 | 29.6 | **4** | 3.07 | 692 | 6 |
-| `evt` | 1.08 | 14.4 | 2 | 3.12 | 531 | 6 |
-| `fhs` | 1.22 | **7.5** | 2 | 3.10 | 503 | 5 |
-| `mc_merton_idio` | 1.37 | 9.5 | 0 | 3.17 | 485 | 2 |
-| `ewma` | 2.04 | **3.6** | 0 | 3.34 | 447 | 1 |
-| `normal` | 1.78 | 7.0 | 0 | 3.24 | 466 | **0** |
-| `mc_gbm` | 1.79 | 7.0 | 0 | 3.24 | 466 | **0** |
+| `mc_merton` | **0.94** | 19.4 | **4** | 3.10 | 550 | **8** |
+| `mc_merton_ewma` | 0.72 | **10.5** | **4** | **3.00** | 544 | **8** |
+| `t_student` | 1.06 | 11.8 | 3 | 3.10 | 548 | 7 |
+| `cornish_fisher` | 0.69 | 29.3 | **4** | 3.07 | 693 | 6 |
+| `evt` | 1.08 | 13.2 | 2 | 3.12 | 531 | 6 |
+| `historico` | 1.23 | 12.1 | 2 | 3.13 | 519 | 5 |
+| `fhs` | 1.22 | 7.5 | 2 | 3.10 | 504 | 5 |
+| `fhs_merton` | 1.22 | 7.4 | 1 | 3.09 | 498 | 5 |
+| `mc_merton_idio` | 1.37 | 8.9 | 0 | 3.17 | 487 | 2 |
+| `ewma` | 2.09 | **3.4** | 0 | 3.35 | 449 | 1 |
+| `normal` | 1.78 | 7.0 | 0 | 3.23 | 465 | **0** |
+| `mc_gbm` | 1.82 | 6.3 | 0 | 3.24 | 465 | **0** |
 
 ### Three axes, and no model gets all three
 
@@ -196,12 +202,13 @@ This is a comparison yardstick under the *historical* Basel VaR traffic light, *
 regulatory capital figure — see [Scope](#scope-and-limitations):
 
 ```
-mc_gbm         $389,062   +0.0%   ← fails Kupiec, CC, and ES
-normal         $389,877   +0.2%   ← fails all four tests
-ewma           $393,288   +1.1%
-fhs            $427,270   +9.8%
-mc_merton      $460,524  +18.4%   ← the best calibrated
-cornish_fisher $530,557  +36.4%
+normal         $389,877   +0.0%   ← fails all four tests
+mc_gbm         $390,960   +0.3%   ← fails Kupiec, CC, and ES
+ewma           $393,288   +0.9%   ← fails Kupiec and ES
+fhs            $427,270   +9.6%
+mc_merton      $461,661  +18.4%   ← the best calibrated
+mc_merton_ewma $482,938  +23.9%
+cornish_fisher $530,557  +36.1%
 ```
 
 **The model that fails everything is the cheapest.** The mechanism: the multiplier penalizes at
@@ -216,6 +223,45 @@ keeping P&L attribution and qualitative approval requirements alongside the quan
 
 *This project's original hypothesis was that failing the backtest would raise capital costs. It
 turned out to be wrong in sign. Reported as it came out.*
+
+---
+
+## Act 3 — closing the gap the project left open
+
+Act 2 ended on a specific unbuilt extension: *couple Merton marginals to an EWMA-style
+conditional scale*. Two ways of doing it are now in the registry.
+
+**Does EWMA leave anything for Merton to model?** Standardising each asset by its own EWMA
+volatility absorbs **63% to 90%** of the excess kurtosis — most of the fat tails in daily
+returns come from volatility clustering, not from jumps. But 2.06 of excess kurtosis survives
+on average, and that residual is what the jump component fits. Had it been zero, the model
+would have collapsed to plain `ewma`.
+
+**`mc_merton_ewma`** standardises per asset, calibrates Merton on the residuals, generates
+joint scenarios with the systemic jump, and rescales by tomorrow's conditional volatility. It
+is a constant-conditional-correlation model with Merton innovations.
+
+**`fhs_merton`** does the same on the portfolio series directly, avoiding the CCC assumption —
+at the cost of losing the systemic jump, since there are no assets left to couple.
+
+| | frequency | timing | magnitude | total |
+|---|---|---|---|---|
+| `mc_merton` | **0.94** (Kupiec 4/4) | 19.4 | **ES 4/4** | 8/16 |
+| `mc_merton_ewma` | 0.72 (Kupiec 2/4) | **10.5** | **ES 4/4** | 8/16 |
+| `fhs_merton` | 1.22 | 7.4 | ES 1/4 | 5/16 |
+
+**The gap narrowed; it did not close.** `mc_merton_ewma` is the only specification that combines
+a perfect ES record with any independence pass, it halves the clustering (19.4 → 10.5) and it
+carries the lowest capital multiplier of the twelve (3.00 — every window green). But it bought
+that by becoming systematically conservative: 0.72× where Merton sits at 0.94×. It traded one
+bias for another, and 10.5 is still an order of magnitude from the 1.0 that independence wants.
+
+**`fhs_merton` is a clean negative result.** Replacing FHS's empirical bootstrap with a
+parametric tail made it *worse* — ES falls from 2/4 to 1/4. The mechanism is visible in the
+tests: the parametric tail reaches −10σ where the worst observed residual is −5.14σ. That
+ability to generate the unseen helps in the multivariate construction and overshoots in the
+univariate one. The empirical residual distribution was doing better work than the parametric
+fit. It stays in the registry, documented, rather than being quietly dropped.
 
 ---
 
@@ -333,7 +379,7 @@ attribution. Run `make report` for the diagnostic.
 ```bash
 pip install -e ".[data]"       # omit [data] to run fully offline from the cached CSV
 python tests/test_core.py      # 25 validation checks, ~4 min
-python -m src.backtest         # walk-forward, 10 models × 4 portfolios, ~8 min
+python -m src.backtest         # walk-forward, 12 models × 4 portfolios, ~12 min
 python -m src.basel            # capital traffic light and ES backtest
 python -m src.plots            # figures
 python -m src.diario --sembrar # daily run with persistent state (shadow mode)
@@ -358,7 +404,7 @@ versioned (15 MB of derived output), so run the backtest first.
 src/data.py       ingestion and cache
 src/merton.py     calibration, cumulants, simulation, joint scenarios
 src/optimize.py   min-CVaR (LP), Markowitz (QP), risk parity
-src/risk.py       registry of the 10 VaR/ES models under one signature
+src/risk.py       registry of the 12 VaR/ES models under one signature
 src/backtest.py   walk-forward, Kupiec, Christoffersen
 src/basel.py      capital traffic light and Acerbi–Székely
 src/diario.py     daily run with persistent state

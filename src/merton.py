@@ -89,11 +89,18 @@ def calibrar(r: np.ndarray, lam: float = LAMBDA_DEFAULT) -> ParamsMerton:
     sigma_j0 = max((exkurt * var**2 / (3 * lam)) ** 0.25, 1e-4)
     mu_j0 = skew * var**1.5 / (3 * lam * sigma_j0**2)
 
+    # Los límites se fijan en múltiplos de la desviación muestral, no en valores
+    # absolutos. Con límites absolutos la función solo servía para retornos
+    # diarios (escala ~1e-2) y rechazaba la semilla en cuanto se le pasaban
+    # residuos estandarizados (escala ~1). El salto calibrado sobre este
+    # universo mide entre 2 y 3 desviaciones, así que 10 deja holgura de sobra.
+    esc = np.sqrt(var)
+    tope = 10 * esc
     sol = least_squares(
         _residuos,
-        x0=[mu_j0, sigma_j0],
+        x0=[np.clip(mu_j0, -tope, tope), np.clip(sigma_j0, 1e-5 * esc, tope)],
         args=(var, skew, exkurt, lam),
-        bounds=([-0.5, 1e-5], [0.5, 0.5]),
+        bounds=([-tope, 1e-5 * esc], [tope, tope]),
     )
     mu_j, sigma_j = sol.x
 

@@ -437,19 +437,23 @@ def test_dia_9_cobertura_condicional():
     print(f"  OK  CC = POF + IND (LR {cc['LR']:.1f}, p {cc['p_valor']:.2e})")
 
 
-def test_dia_11_los_diez_modelos():
-    """Coherencia de los 10: VaR > 0, ES >= VaR y monotonía en el nivel.
+def test_dia_11_coherencia_del_registro():
+    """Coherencia de TODO el registro: VaR > 0, ES >= VaR y monotonía en el nivel.
 
     Un modelo que viole la monotonía (VaR al 99% menor que al 95%) o que
     devuelva ES < VaR tiene un error de signo. Es el fallo más común al añadir
     especificaciones, y por eso se recorre el registro completo.
+
+    El conteo se acota por abajo, no se fija: una aserción exacta se rompería
+    con cada modelo nuevo y acabaría relajándose sin pensar. La cota inferior
+    sigue detectando el borrado accidental, que es lo que importa.
     """
     rets = data.log_returns()
     ventana = rets.values[-1000:]
     w = np.full(8, 1 / 8)
     rng = np.random.default_rng(4)
 
-    assert len(risk.REGISTRO) == 10, f"faltan modelos: {len(risk.REGISTRO)}"
+    assert len(risk.REGISTRO) >= 10, f"faltan modelos: {len(risk.REGISTRO)}"
     for nombre, f in risk.REGISTRO.items():
         v95, e95 = f(ventana, w, 0.95, rng)
         v99, e99 = f(ventana, w, 0.99, rng)
@@ -734,6 +738,127 @@ def test_auditoria_d_reproducibilidad():
 
     print(f"  OK  manifiesto con {len(m['hashes'])} hashes, parámetros leídos del código")
     print("  OK  pyproject declara requires-python >= 3.10")
+
+
+def test_acto3_escala_condicional():
+    """Los dos modelos nuevos escalan con la volatilidad reciente, no con la ventana.
+
+    Es la propiedad que los define: entrando a marzo de 2020 el VaR tiene que
+    subir mucho más que el de un modelo de ventana plana. Si no sube, la
+    estandarización EWMA no está llegando a los escenarios.
+    """
+    rets = data.log_returns()
+    w = np.full(8, 1 / 8)
+    rng = np.random.default_rng(3)
+    i_cri = rets.index.get_loc(rets.index[rets.index <= "2020-03-20"][-1])
+    i_cal = rets.index.get_loc(rets.index[rets.index <= "2017-09-01"][-1])
+
+    razones = {}
+    for m in ("mc_merton", "mc_merton_ewma", "fhs_merton", "ewma"):
+        f = risk.REGISTRO[m]
+        v_cri = f(rets.values[i_cri - 999:i_cri + 1], w, 0.99, rng)[0]
+        v_cal = f(rets.values[i_cal - 999:i_cal + 1], w, 0.99, rng)[0]
+        razones[m] = v_cri / v_cal
+
+    for m in ("mc_merton_ewma", "fhs_merton"):
+        assert razones[m] > 3 * razones["mc_merton"], \
+            f"{m} no reacciona al régimen: {razones}"
+        assert m in risk.CONDICIONALES
+
+    print("  OK  VaR(crisis)/VaR(calma) — " +
+          ", ".join(f"{m} {razones[m]:.1f}" for m in razones))
+
+
+def test_acto3_cola_parametrica_supera_lo_observado():
+    """La diferencia frente a FHS: puede generar pérdidas nunca vistas.
+
+    FHS remuestrea residuos observados, así que su peor escenario está acotado
+    por el peor residuo de la ventana. Con innovaciones paramétricas ese techo
+    desaparece — que es justo lo que hace falta cuando un salto golpea durante
+    un tramo de calma.
+    """
+    rets = data.log_returns()
+    w = np.full(8, 1 / 8)
+    rng = np.random.default_rng(11)
+    ventana = rets.values[-1000:]
+
+    r = ventana @ w
+    sd = risk._sigma_ewma(r)
+    peor_residuo = (r / sd).min()
+
+    p = merton.calibrar(r / sd)
+    sim = merton.simular(p, 200_000, 1, rng).ravel()
+    assert sim.min() < peor_residuo, \
+        f"la simulación no supera el peor residuo observado ({sim.min():.2f} vs {peor_residuo:.2f})"
+
+    # Y la escala sigue siendo la condicional, no la de la ventana entera.
+    v_par, _ = risk.fhs_merton(ventana, w, 0.99, rng)
+    v_fhs, _ = risk.fhs(ventana, w, 0.99, rng)
+    assert 0.5 < v_par / v_fhs < 2.0, f"escala descuadrada: {v_par:.5f} vs {v_fhs:.5f}"
+
+    print(f"  OK  peor residuo observado {peor_residuo:.2f}, simulado {sim.min():.2f} "
+          "— la cola paramétrica va más allá de lo visto")
+    print(f"  OK  escala coherente con FHS: {v_par:.5f} vs {v_fhs:.5f}")
+
+
+def test_acto3_limites_de_calibracion_escalan():
+    """calibrar() debe funcionar en cualquier escala, no solo en retornos diarios.
+
+    Los límites del solver eran absolutos y rechazaban residuos estandarizados
+    (escala ~1) por salirse de un tope pensado para retornos (~1e-2). Ahora son
+    múltiplos de la desviación muestral.
+    """
+    rng = np.random.default_rng(5)
+    base = rng.standard_normal(4000) + 0.3 * rng.standard_t(3, 4000)
+
+    calibs = {}
+    for escala in (1e-3, 1.0, 1e3):
+        p = merton.calibrar(base * escala)
+        calibs[escala] = p
+        _, var_t, skew_t, kurt_t = merton.cumulantes_teoricos(p)
+        emp = merton.momentos(base * escala)
+        assert np.isclose(var_t, emp[1], rtol=1e-6), escala
+        assert np.isclose(kurt_t, emp[3], rtol=1e-6), escala
+
+    # La solución debe ser equivariante: escalar los datos escala los parámetros.
+    a, b = calibs[1e-3], calibs[1.0]
+    assert np.isclose(b.sigma_j / a.sigma_j, 1e3, rtol=1e-3), \
+        f"no equivariante: {b.sigma_j / a.sigma_j}"
+
+    print("  OK  calibra en escalas 1e-3, 1 y 1e3 con equivarianza exacta")
+
+
+def test_reproducibilidad_flujos_independientes():
+    """El resultado de un modelo no puede depender de con quién comparte registro.
+
+    Con un generador compartido, los modelos consumían en orden y añadir una
+    especificación corría la secuencia de todas las demás: mc_merton pasó de 38
+    excepciones a 41 sin que nadie tocara el modelo. La semilla estaba fija y aun
+    así el resultado dependía del tamaño del registro.
+    """
+    rets = data.log_returns().iloc[-1150:]
+    base = dict(rets=rets, ventana=1000, carteras=["igual_peso"], verbose=False)
+
+    solo = bt.walk_forward(modelos=["mc_merton"], **base).set_index("fecha").VaR
+    acomp = bt.walk_forward(modelos=["normal", "mc_merton", "ewma"], **base)
+    acomp = acomp[acomp.modelo == "mc_merton"].set_index("fecha").VaR
+    assert np.allclose(solo, acomp), f"máx Δ {np.abs(solo - acomp).max():.2e}"
+
+    repetido = bt.walk_forward(modelos=["mc_merton"], **base).set_index("fecha").VaR
+    assert np.allclose(solo, repetido), "no repetible entre corridas"
+
+    # La etiqueta entra por su nombre: dos nombres distintos, flujos distintos;
+    # el mismo nombre, el mismo flujo, sin importar el orden de creación.
+    a = bt._flujo(0, "mc_merton", 50).standard_normal(5)
+    b = bt._flujo(0, "fhs", 50).standard_normal(5)
+    c = bt._flujo(0, "mc_merton", 50).standard_normal(5)
+    assert not np.allclose(a, b), "dos modelos comparten flujo"
+    assert np.allclose(a, c), "el mismo modelo no reproduce su flujo"
+    assert not np.allclose(a, bt._flujo(0, "mc_merton", 51).standard_normal(5)), \
+        "días distintos comparten flujo"
+
+    print("  OK  mc_merton idéntico solo y acompañado (máx Δ 0.0), y entre corridas")
+    print("  OK  flujos separados por nombre y por día, estables entre procesos")
 
 
 if __name__ == "__main__":

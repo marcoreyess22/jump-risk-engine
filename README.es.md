@@ -8,7 +8,7 @@
 
 **Menos. Ese es el problema.**
 
-Auditoría de **10 especificaciones de VaR/ES × 4 carteras** sobre 8 clases de activo y 3,923
+Auditoría de **12 especificaciones de VaR/ES × 4 carteras** sobre 8 clases de activo y 3,923
 días out-of-sample (2011-2026), con validación de Kupiec, Christoffersen, Acerbi-Székely y el
 semáforo de capital de Basilea.
 
@@ -32,9 +32,12 @@ mide el marco vigente, ya que el IMA de FRTB se construye sobre Expected Shortfa
 VaR.
 
 Su defecto es real y hay que decirlo: **no modela agrupamiento de volatilidad**, así que sus
-excepciones se apelmazan en crisis. Ningún modelo del conjunto resuelve los tres ejes; el que
-mejor acierta el momento (`ewma`, `fhs`) falla la magnitud. **La extensión evidente —y no
-construida— es acoplar las marginales de Merton a una escala condicional tipo EWMA.**
+excepciones se apelmazan en crisis. Esa extensión ya está construida — ver
+[Acto 3](#acto-3--cerrar-el-hueco-que-el-proyecto-dejó-abierto). `mc_merton_ewma` reduce el
+agrupamiento a la mitad y conserva el ES perfecto con un multiplicador de capital menor, pero se
+vuelve sistemáticamente conservadora en frecuencia (0.72× contra 0.94×). Empatan a 8/16 y
+ninguna domina: **ningún modelo del conjunto resuelve los tres ejes.** Elige `mc_merton` si
+pesa más la precisión de frecuencia, `mc_merton_ewma` si pesa el agrupamiento.
 
 Y no confiar en el semáforo de Basilea como único criterio de aprobación: sobre estos datos
 **premia económicamente a los modelos que reprueba**. La conclusión práctica no es afinar el
@@ -99,15 +102,16 @@ este informe son las posteriores.
 | Modelo | Excepciones | Razón obs/esp | Kupiec |
 |---|---|---|---|
 | `normal` | 81 | **2.06×** | REPRUEBA |
-| `mc_gbm` | 81 | **2.06×** | REPRUEBA |
+| `mc_gbm` | 84 | **2.14×** | REPRUEBA |
 | `historico` | 52 | 1.33× | pasa |
 | `mc_merton` | 38 | **0.97×** | pasa |
 
 *(cartera de mínima varianza; el patrón se repite en las cuatro — ver
 [figura 3](figures/3_razon_excepciones.png))*
 
-`normal` y `mc_gbm` coinciden casi exactamente, como deben: son el mismo supuesto por dos vías,
-una cerrada y otra por simulación. Que converjan es una verificación cruzada que no se diseñó.
+`normal` y `mc_gbm` caen a distancia de ruido de simulación (81 contra 84), como deben: son el
+mismo supuesto por dos vías, una cerrada y otra por Monte Carlo. Que coincidan es una
+verificación cruzada que no se diseñó.
 
 ### 2. Las colas idiosincrásicas se diversifican; las sistémicas no
 
@@ -147,23 +151,25 @@ Ese límite es la pregunta que abre el Acto 2: **¿condicionar por volatilidad l
 
 ---
 
-## Acto 2 — auditoría de las diez especificaciones
+## Acto 2 — auditoría de las diez primeras especificaciones
 
 Promedio sobre las 4 carteras. `pasa` cuenta pruebas superadas de 16 (4 carteras × Kupiec,
 independencia, cobertura condicional y Acerbi-Székely).
 
 | modelo | razón | persistencia | ES (de 4) | multiplicador | proxy de capital (k$/10M) | pasa (de 16) |
 |---|---|---|---|---|---|---|
-| `mc_merton` | **0.96** | 20.4 | **4** | 3.11 | 551 | **8** |
-| `t_student` | 1.08 | 12.1 | 3 | 3.11 | 550 | 7 |
-| `historico` | 1.20 | 12.5 | 2 | 3.12 | 518 | 6 |
-| `cornish_fisher` | 0.68 | 29.6 | **4** | 3.07 | 692 | 6 |
-| `evt` | 1.08 | 14.4 | 2 | 3.12 | 531 | 6 |
-| `fhs` | 1.22 | **7.5** | 2 | 3.10 | 503 | 5 |
-| `mc_merton_idio` | 1.37 | 9.5 | 0 | 3.17 | 485 | 2 |
-| `ewma` | 2.04 | **3.6** | 0 | 3.34 | 447 | 1 |
-| `normal` | 1.78 | 7.0 | 0 | 3.24 | 466 | **0** |
-| `mc_gbm` | 1.79 | 7.0 | 0 | 3.24 | 466 | **0** |
+| `mc_merton` | **0.94** | 19.4 | **4** | 3.10 | 550 | **8** |
+| `mc_merton_ewma` | 0.72 | **10.5** | **4** | **3.00** | 544 | **8** |
+| `t_student` | 1.06 | 11.8 | 3 | 3.10 | 548 | 7 |
+| `cornish_fisher` | 0.69 | 29.3 | **4** | 3.07 | 693 | 6 |
+| `evt` | 1.08 | 13.2 | 2 | 3.12 | 531 | 6 |
+| `historico` | 1.23 | 12.1 | 2 | 3.13 | 519 | 5 |
+| `fhs` | 1.22 | 7.5 | 2 | 3.10 | 504 | 5 |
+| `fhs_merton` | 1.22 | 7.4 | 1 | 3.09 | 498 | 5 |
+| `mc_merton_idio` | 1.37 | 8.9 | 0 | 3.17 | 487 | 2 |
+| `ewma` | 2.09 | **3.4** | 0 | 3.35 | 449 | 1 |
+| `normal` | 1.78 | 7.0 | 0 | 3.23 | 465 | **0** |
+| `mc_gbm` | 1.82 | 6.3 | 0 | 3.24 | 465 | **0** |
 
 ### Tres ejes, y ningún modelo acierta los tres
 
@@ -202,12 +208,13 @@ varianza. Es una vara de comparación bajo el semáforo VaR *histórico* de Basi
 cifra de capital regulatorio — ver [Alcance y limitaciones](#alcance-y-limitaciones):
 
 ```
-mc_gbm         $389,062   +0.0%   ← reprueba Kupiec, CC y ES
-normal         $389,877   +0.2%   ← reprueba las cuatro pruebas
-ewma           $393,288   +1.1%
-fhs            $427,270   +9.8%
-mc_merton      $460,524  +18.4%   ← el mejor calibrado
-cornish_fisher $530,557  +36.4%
+normal         $389,877   +0.0%   ← reprueba las cuatro pruebas
+mc_gbm         $390,960   +0.3%   ← reprueba Kupiec, CC y ES
+ewma           $393,288   +0.9%   ← reprueba Kupiec y ES
+fhs            $427,270   +9.6%
+mc_merton      $461,661  +18.4%   ← el mejor calibrado
+mc_merton_ewma $482,938  +23.9%
+cornish_fisher $530,557  +36.1%
 ```
 
 **El modelo que reprueba todo es el más barato.** El mecanismo: el multiplicador castiga como
@@ -223,6 +230,46 @@ del test cuantitativo.
 
 *La hipótesis original de este proyecto era que reprobar el backtest encarecería el capital.
 Resultó incorrecta en el signo. Se reporta como salió.*
+
+---
+
+## Acto 3 — cerrar el hueco que el proyecto dejó abierto
+
+El Acto 2 terminaba señalando una extensión concreta y no construida: *acoplar las marginales
+de Merton a una escala condicional tipo EWMA*. Ya están en el registro, por dos vías.
+
+**¿Le queda algo a Merton por modelar tras EWMA?** Estandarizar cada activo por su propia
+volatilidad EWMA absorbe entre el **63% y el 90%** del exceso de kurtosis: la mayor parte de
+las colas gordas diarias viene del agrupamiento de volatilidad, no de saltos. Pero sobrevive un
+exceso medio de 2.06, y ese residuo es lo que ajusta el componente de saltos. Si hubiera sido
+cero, el modelo habría colapsado a `ewma`.
+
+**`mc_merton_ewma`** estandariza por activo, calibra Merton sobre los residuos, genera
+escenarios conjuntos con el salto sistémico y reescala por la volatilidad de mañana. Es un
+modelo de correlación condicional constante con innovaciones de Merton.
+
+**`fhs_merton`** hace lo mismo directamente sobre la serie de la cartera, evitando el supuesto
+CCC — a costa de perder el salto sistémico, porque ya no hay activos que acoplar.
+
+| | frecuencia | momento | magnitud | total |
+|---|---|---|---|---|
+| `mc_merton` | **0.94** (Kupiec 4/4) | 19.4 | **ES 4/4** | 8/16 |
+| `mc_merton_ewma` | 0.72 (Kupiec 2/4) | **10.5** | **ES 4/4** | 8/16 |
+| `fhs_merton` | 1.22 | 7.4 | ES 1/4 | 5/16 |
+
+**El hueco se estrechó; no se cerró.** `mc_merton_ewma` es la única especificación que combina
+un ES perfecto con algún acierto de independencia, reduce el agrupamiento a la mitad
+(19.4 → 10.5) y carga el multiplicador de capital más bajo de las doce (3.00 — todas las
+ventanas en verde). Pero lo compró volviéndose sistemáticamente conservadora: 0.72× donde
+Merton está en 0.94×. Cambió un sesgo por otro, y 10.5 sigue a un orden de magnitud del 1.0 que
+la independencia exige.
+
+**`fhs_merton` es un resultado negativo limpio.** Sustituir el remuestreo empírico de FHS por
+una cola paramétrica lo empeoró: el ES cae de 2/4 a 1/4. El mecanismo se ve en las pruebas — la
+cola paramétrica llega a −10σ cuando el peor residuo observado es −5.14σ. Esa capacidad de
+generar lo nunca visto ayuda en la construcción multivariada y sobredispara en la univariada.
+La distribución empírica de residuos hacía mejor trabajo que el ajuste paramétrico. Se queda en
+el registro, documentado, en lugar de desaparecer sin ruido.
 
 ---
 
@@ -343,7 +390,7 @@ atribución causal. Corre `make report` para verlo.
 ```bash
 pip install -e ".[data]"       # sin [data] corre 100% offline desde el CSV cacheado
 python tests/test_core.py      # 25 checks de validación, ~4 min
-python -m src.backtest         # walk-forward, 10 modelos × 4 carteras, ~8 min
+python -m src.backtest         # walk-forward, 12 modelos × 4 carteras, ~12 min
 python -m src.basel            # semáforo de capital y backtest de ES
 python -m src.plots            # figuras
 python -m src.diario --sembrar # corrida diaria con estado (modo sombra)
@@ -366,7 +413,7 @@ importan:
 src/data.py       ingesta y caché
 src/merton.py     calibración, cumulantes, simulación, escenarios conjuntos
 src/optimize.py   mín-CVaR (LP), Markowitz (QP), risk parity
-src/risk.py       registro de los 10 modelos VaR/ES con firma única
+src/risk.py       registro de los 12 modelos VaR/ES con firma única
 src/backtest.py   walk-forward, Kupiec, Christoffersen
 src/basel.py      semáforo de capital y Acerbi-Székely
 src/diario.py     corrida diaria con estado persistente

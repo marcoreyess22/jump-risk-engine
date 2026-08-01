@@ -12,6 +12,8 @@ Reoptimizar a diario invalidaría la medición: el VaR mediría una cartera que
 nunca existió un día completo.
 """
 
+import zlib
+
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -110,6 +112,25 @@ CARTERAS = {
 # ── Walk-forward ─────────────────────────────────────────────────────────────
 
 
+def _flujo(semilla: int, etiqueta: str, t: int) -> np.random.Generator:
+    """Generador independiente por (etiqueta, día), estable entre corridas.
+
+    Un generador COMPARTIDO haría que el resultado de un modelo dependiera de
+    cuántos modelos hay en el registro y en qué orden consumen: añadir una
+    especificación corría la secuencia de todas las demás. Con λ=0.05 eso movió
+    a mc_merton de 38 excepciones a 41 sin tocar el modelo.
+
+    La etiqueta entra por CRC32 de su nombre, no por su posición, y crc32 es
+    estable entre procesos — a diferencia de hash() sobre cadenas, que numpy
+    aceptaría pero que Python aleatoriza por proceso.
+
+    El día entra en la clave y la cartera NO: así todas las carteras ven los
+    mismos escenarios el mismo día, lo que convierte su comparación en números
+    aleatorios comunes y le quita ruido.
+    """
+    return np.random.default_rng([semilla, zlib.crc32(etiqueta.encode()), t])
+
+
 def walk_forward(rets: pd.DataFrame, ventana: int = VENTANA, nivel: float = NIVEL,
                  semilla: int = 0, verbose: bool = True,
                  carteras: list[str] | None = None,
@@ -122,7 +143,6 @@ def walk_forward(rets: pd.DataFrame, ventana: int = VENTANA, nivel: float = NIVE
     una laptop.
     """
     idx, X, T = rets.index, rets.values, len(rets)
-    rng = np.random.default_rng(semilla)
     carteras_sel = {k: CARTERAS[k] for k in (carteras or CARTERAS)}
     modelos_sel = {k: risk.REGISTRO[k] for k in (modelos or risk.REGISTRO)}
 
@@ -139,7 +159,7 @@ def walk_forward(rets: pd.DataFrame, ventana: int = VENTANA, nivel: float = NIVE
         mes = (idx[t].year, idx[t].month)
         if mes != mes_prev:
             for cn, cf in carteras_sel.items():
-                w_act[cn] = cf(win, rng)
+                w_act[cn] = cf(win, _flujo(semilla, f"cartera:{cn}", t))
             mes_prev, n_reb = mes, n_reb + 1
             if verbose and n_reb % 24 == 0:
                 print(f"  ... {idx[t].date()}  ({n_reb} rebalanceos)", flush=True)
@@ -151,7 +171,7 @@ def walk_forward(rets: pd.DataFrame, ventana: int = VENTANA, nivel: float = NIVE
                 # modelo no puede calcularse, su fila queda marcada y con NaN,
                 # nunca rellenada por otro modelo.
                 try:
-                    var, es = mf(win, w, nivel, rng)
+                    var, es = mf(win, w, nivel, _flujo(semilla, mn, t))
                     estado = "ok"
                 except risk.CalibrationInfeasible as err:
                     var, es, estado = np.nan, np.nan, f"calibracion_infactible: {err}"

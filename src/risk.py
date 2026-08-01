@@ -295,6 +295,90 @@ def evt(rets, w, nivel, rng=None, q_umbral=0.95):
     return float(var), float(es)
 
 
+def _panel_ewma(rets: np.ndarray, lam: float) -> tuple[np.ndarray, np.ndarray]:
+    """Volatilidad condicional por activo y su proyección a t+1."""
+    sd = np.column_stack([_sigma_ewma(rets[:, i], lam) for i in range(rets.shape[1])])
+    sd_next = np.sqrt(lam * sd[-1] ** 2 + (1 - lam) * rets[-1] ** 2)
+    return sd, sd_next
+
+
+def mc_merton_ewma(rets, w, nivel, rng, lam_ewma=LAMBDA_EWMA,
+                   lam=merton.LAMBDA_DEFAULT, sistemico=True):
+    """Saltos de Merton sobre residuos estandarizados por volatilidad EWMA.
+
+    La síntesis que el resto del registro no alcanza. El Acto 2 dejó tres ejes y
+    ningún modelo que acertara los tres:
+
+        mc_merton  magnitud y frecuencia bien, momento mal (vol plana)
+        ewma       momento bien, magnitud y frecuencia mal (colas gaussianas)
+        fhs        momento y frecuencia bien, magnitud mal (cola remuestreada)
+
+    Aquí la ESCALA es condicional —de EWMA— y la FORMA de la cola es
+    paramétrica —de Merton, con salto sistémico—. Frente a FHS la diferencia es
+    que puede generar colas que aún no han ocurrido: FHS solo remuestrea lo ya
+    visto, y en un tramo de calma su peor residuo es el peor día tranquilo.
+
+    Es un modelo de correlación condicional constante con innovaciones de
+    Merton: se estandariza cada activo por su propia volatilidad, se calibran
+    los saltos sobre los residuos, y la dependencia sale de la correlación de
+    esos residuos.
+
+    Medido sobre este universo, la estandarización EWMA absorbe entre 63% y 90%
+    de la kurtosis, pero deja 2.06 de exceso medio. Esa cola residual es lo que
+    Merton modela; si fuera cero, este modelo colapsaría a EWMA.
+    """
+    import pandas as pd
+
+    sd, sd_next = _panel_ewma(rets, lam_ewma)
+    z = rets / sd
+
+    try:
+        params = {i: merton.calibrar(z[:, i], lam) for i in range(z.shape[1])}
+    except ValueError as err:
+        raise CalibrationInfeasible(
+            f"calibración de Merton infactible sobre residuos EWMA con λ={lam}: {err}"
+        ) from err
+
+    esc_z = merton.escenarios(pd.DataFrame(z), params, N_ESC, rng, sistemico=sistemico)
+    return _var_es_empirico((esc_z * sd_next) @ w, nivel)
+
+
+def fhs_merton(rets, w, nivel, rng, lam_ewma=LAMBDA_EWMA, lam=merton.LAMBDA_DEFAULT):
+    """FHS con innovaciones de Merton en lugar de remuestreo empírico.
+
+    Misma idea que mc_merton_ewma pero aplicada DIRECTAMENTE sobre la serie de
+    la cartera, sin descomponerla en activos. Evita el supuesto de correlación
+    condicional constante, que sobre carteras optimizadas es caro: mc_merton_ewma
+    reconstruye la cartera desde volatilidades por activo y una correlación de
+    toda la ventana, y una cartera de mínima varianza —construida justo para
+    cancelar la covarianza vigente— pierde esa cancelación al recomponerse.
+    Medido sobre la última ventana, sale 1.5× más volátil de lo que su propia
+    serie indica.
+
+    Lo que se gana en escala se pierde en estructura: aquí no hay salto
+    sistémico porque no hay activos que acoplar. Cuál de los dos compensa es una
+    pregunta empírica, y por eso ambos están en el registro.
+
+    Frente a fhs: la cola es paramétrica, así que puede generar pérdidas peores
+    que la peor observada. FHS en un tramo de calma solo remuestrea días
+    tranquilos.
+    """
+    r = rets @ w
+    sd = _sigma_ewma(r, lam_ewma)
+    z = r / sd
+    sd_next = np.sqrt(lam_ewma * sd[-1] ** 2 + (1 - lam_ewma) * r[-1] ** 2)
+
+    try:
+        p = merton.calibrar(z, lam)
+    except ValueError as err:
+        raise CalibrationInfeasible(
+            f"calibración infactible sobre residuos EWMA de la cartera: {err}"
+        ) from err
+
+    esc = merton.simular(p, N_ESC, 1, rng).ravel() * sd_next
+    return _var_es_empirico(esc, nivel)
+
+
 REGISTRO = {
     # Acto 1 — incondicionales
     "historico": historico,
@@ -309,9 +393,12 @@ REGISTRO = {
     # Acto 2 — CON volatilidad condicional
     "ewma": ewma,
     "fhs": fhs,
+    # Acto 3 — escala condicional + forma paramétrica de la cola
+    "mc_merton_ewma": mc_merton_ewma,
+    "fhs_merton": fhs_merton,
 }
 
-CONDICIONALES = {"ewma", "fhs"}
+CONDICIONALES = {"ewma", "fhs", "mc_merton_ewma", "fhs_merton"}
 
 
 def evaluar_todos(rets, w, nivel, rng, modelos=None) -> dict[str, tuple[float, float]]:

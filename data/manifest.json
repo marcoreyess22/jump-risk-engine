@@ -47,7 +47,9 @@
       "cornish_fisher",
       "evt",
       "ewma",
-      "fhs"
+      "fhs",
+      "mc_merton_ewma",
+      "fhs_merton"
     ],
     "carteras": [
       "min_cvar",
@@ -76,44 +78,44 @@
       "bytes": 772040
     },
     "data/walkforward.csv": {
-      "sha256": "67fc08f499dec891b99e865121500c959cf37406a9c356db2ee7041457236d79",
-      "bytes": 14888538
+      "sha256": "bdede4ee2bdb476bc2d2a634b00bc5835d6f898360d19d69520630c56a685bf4",
+      "bytes": 18942736
     },
     "data/tabla_maestra.csv": {
-      "sha256": "066198c59cea24d50b9cbf291040c27cc62100e2d8c25c8628c427b9ebaaf8ce",
-      "bytes": 873
+      "sha256": "f34fec9c783b9e41357839f6a785cc41c8916890b2fc6eb042b2d4748b63ef8a",
+      "bytes": 1048
     },
     "src/data.py": {
       "sha256": "075fc1eabff77f3aa3e5b4bcb8475ba157394f7e6dc61f93752db5f977a923fb",
       "bytes": 2755
     },
     "src/merton.py": {
-      "sha256": "83192250e3de34c591d73a40960eae0d18434aed5bd069561304f351fe0c3dc6",
-      "bytes": 14762
+      "sha256": "0fcda059ed85d2547b169f027507973fa4813899cf717e72d837ddc709ba7456",
+      "bytes": 15256
     },
     "src/optimize.py": {
       "sha256": "73b67889fe2eaa1cd0afed1dd30439091bbbb3a5ff141b0c11647fae62dd6511",
       "bytes": 5448
     },
     "src/risk.py": {
-      "sha256": "b971a9cc8da681aeef13968fa687e6386ab35ec5da413eedf730b01ce40c7b7b",
-      "bytes": 13467
+      "sha256": "542c31e327db73532f376d2d7ca43cf23c9ad994eebdcf766b87a3828d9d5d83",
+      "bytes": 17428
     },
     "src/backtest.py": {
-      "sha256": "8d59aa9f6f1976667fee9fd6390f40c11bc511ac2991bda629fa95aa6ce37f32",
-      "bytes": 9625
+      "sha256": "f70527fe9fafb0efbbd9f52746fc91eefc9f55d06d8999c4547f199601c20b98",
+      "bytes": 10604
     },
     "src/basel.py": {
       "sha256": "1f22eaf3c4cc786609b94aed87c448f89db5023ebc0099638f71d00735dd2a0a",
       "bytes": 7538
     },
     "src/plots.py": {
-      "sha256": "e6c2d124287ace2d4b7edf0b3f675bf9a2180b5fee59124d28e35a7bc638059f",
-      "bytes": 8193
+      "sha256": "7d9eb0bbffd88f85ee76c8f5c9c5bf5c4ceb9597c50a011473804d329452c873",
+      "bytes": 8364
     },
     "tests/test_core.py": {
-      "sha256": "463b5fae4f3639d96b4742a7d8418e209cd5c838cde589f44294222184470752",
-      "bytes": 32115
+      "sha256": "edddefe4664602dee19d417b5ead69570d8279031a652d23eb438d74590c49ff",
+      "bytes": 37795
     }
   }
 }
