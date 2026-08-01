@@ -25,7 +25,7 @@ dependencies = [
 data = ["yfinance>=0.2,<1"]
 
 [project.urls]
-Homepage = "https://github.com/marcoreyess/jump-risk-engine"
+Homepage = "https://github.com/marcoreyess22/jump-risk-engine"
 
 [tool.setuptools]
 packages = ["src"]

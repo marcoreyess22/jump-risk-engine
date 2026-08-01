@@ -36,6 +36,11 @@ ARCHIVOS = [
     "tests/test_core.py",
 ]
 
+# Derived outputs: regenerable and deliberately unversioned. Their hash is
+# recorded when the file is present, but its absence is not a divergence --
+# a clean checkout legitimately lacks them.
+DERIVADOS = {"data/walkforward.csv"}
+
 PAQUETES = ["numpy", "pandas", "scipy", "matplotlib", "cvxpy", "yfinance"]
 
 
@@ -129,6 +134,8 @@ def comparar(actual: dict, guardado: dict) -> list[str]:
                 difs.append(f"{clave}.{k}: {guardado.get(clave, {}).get(k)!r} → {v!r}")
     for rel, h in actual["hashes"].items():
         g = guardado.get("hashes", {}).get(rel, {})
+        if rel in DERIVADOS and (h["sha256"] is None or g.get("sha256") is None):
+            continue
         if g.get("sha256") != h["sha256"]:
             difs.append(f"hash {rel}: {str(g.get('sha256'))[:12]} → {str(h['sha256'])[:12]}")
     return difs

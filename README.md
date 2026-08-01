@@ -1,5 +1,7 @@
 # Jump-Diffusion Risk & Allocation Engine
 
+[![tests](https://github.com/marcoreyess22/jump-risk-engine/actions/workflows/tests.yml/badge.svg)](https://github.com/marcoreyess22/jump-risk-engine/actions/workflows/tests.yml)
+
 ## How much capital does the wrong risk model cost you?
 
 **Less. That's the problem.**

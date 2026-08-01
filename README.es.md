@@ -1,5 +1,7 @@
 # Motor de asignación y riesgo con saltos
 
+[![tests](https://github.com/marcoreyess22/jump-risk-engine/actions/workflows/tests.yml/badge.svg)](https://github.com/marcoreyess22/jump-risk-engine/actions/workflows/tests.yml)
+
 *[English version](README.md) · [Guía técnica](docs/guia.html)*
 
 ## ¿Cuánto capital te cuesta el modelo de riesgo equivocado?
