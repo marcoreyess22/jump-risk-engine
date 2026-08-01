@@ -14,17 +14,28 @@ START = "2007-01-01"
 DIAS_ANIO = 252
 
 CACHE = Path(__file__).resolve().parents[1] / "data" / "prices.csv"
+# Caché del motor diario: fuera del control de versiones, para que refrescar
+# datos no toque el ancla de reproducibilidad.
+CACHE_VIVO = Path(__file__).resolve().parents[1] / "data" / "prices_live.csv"
 
 
-def load_prices(refresh: bool = False) -> pd.DataFrame:
+def load_prices(refresh: bool = False, cache: Path | None = None) -> pd.DataFrame:
     """Precios de cierre ajustado. Usa el caché salvo que refresh=True.
 
     El caché se invalida solo si su universo no coincide con TICKERS. Sin esa
     comprobación, cambiar TICKERS devolvía el universo viejo en silencio y todo
     el pipeline corría sobre activos que nadie pidió.
+
+    `cache` permite apuntar a otro archivo. Existe porque data/prices.csv es el
+    ANCLA DE REPRODUCIBILIDAD: está versionado y su hash vive en el manifiesto,
+    así que refrescarlo invalida en silencio todas las tablas publicadas. El
+    proveedor además reajusta la historia entera al aplicar un dividendo, de
+    modo que un refresco no añade un día: cambia los 4,900 anteriores.
+    Los procesos que necesitan datos frescos usan su propia caché.
     """
-    if CACHE.exists() and not refresh:
-        px = pd.read_csv(CACHE, index_col=0, parse_dates=True)
+    cache = cache or CACHE
+    if cache.exists() and not refresh:
+        px = pd.read_csv(cache, index_col=0, parse_dates=True)
         if list(px.columns) == TICKERS:
             return px
         print(f"  caché con universo distinto ({list(px.columns)}); redescargando")
@@ -33,8 +44,8 @@ def load_prices(refresh: bool = False) -> pd.DataFrame:
 
     px = yf.download(TICKERS, start=START, auto_adjust=True, progress=False)["Close"]
     px = px[TICKERS].dropna()
-    CACHE.parent.mkdir(parents=True, exist_ok=True)
-    px.to_csv(CACHE)
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    px.to_csv(cache)
     return px
 
 

@@ -13,3 +13,10 @@ data/estado_diario.json
 
 # Meta del tooling, ajeno al proyecto.
 skill-observations/
+
+# Caché del motor diario: datos frescos que NO deben tocar el ancla
+# de reproducibilidad versionada en data/prices.csv.
+data/prices_live.csv
+
+# Lockfile de uv; el proyecto declara pip/venv como vía soportada.
+uv.lock

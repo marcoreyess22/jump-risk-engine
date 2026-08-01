@@ -1,0 +1,555 @@
+<title>Motor de riesgo con saltos — el modelo equivocado sale más barato</title>
+
+<style>
+  :root {
+    --paper:   #F4F3F1;
+    --surface: #FFFFFF;
+    --sunken:  #EAE8E4;
+    --ink:     #16191C;
+    --ink-2:   #4A5257;
+    --ink-3:   #7E888D;
+    --rule:    #D8D5D0;
+    --calm:    #12615F;
+    --calm-w:  #D5E7E6;
+    --shock:   #C43D1E;
+    --shock-w: #F7DFD8;
+    --shadow:  0 1px 2px rgba(22,25,28,.05), 0 10px 30px rgba(22,25,28,.06);
+
+    --display: Charter, "Bitstream Charter", "Iowan Old Style", Georgia, serif;
+    --body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --measure: 62ch;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper:#0D1315; --surface:#141D20; --sunken:#0A1012;
+      --ink:#E8EDEF; --ink-2:#A6B3B8; --ink-3:#6E7C82; --rule:#243136;
+      --calm:#4FB3AE; --calm-w:#14312F; --shock:#F0704A; --shock-w:#38180F;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.3);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#0D1315; --surface:#141D20; --sunken:#0A1012;
+    --ink:#E8EDEF; --ink-2:#A6B3B8; --ink-3:#6E7C82; --rule:#243136;
+    --calm:#4FB3AE; --calm-w:#14312F; --shock:#F0704A; --shock-w:#38180F;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.3);
+  }
+  :root[data-theme="light"] {
+    --paper:#F4F3F1; --surface:#FFFFFF; --sunken:#EAE8E4;
+    --ink:#16191C; --ink-2:#4A5257; --ink-3:#7E888D; --rule:#D8D5D0;
+    --calm:#12615F; --calm-w:#D5E7E6; --shock:#C43D1E; --shock-w:#F7DFD8;
+    --shadow:0 1px 2px rgba(22,25,28,.05), 0 10px 30px rgba(22,25,28,.06);
+  }
+
+  body { background:var(--paper); color:var(--ink); font-family:var(--body);
+         font-size:17px; line-height:1.62; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:70rem; margin:0 auto; padding:0 1.5rem; }
+  .prose { max-width:var(--measure); }
+  p { margin:0 0 1rem; }
+  strong { font-weight:650; }
+  a { color:var(--calm); text-underline-offset:3px; }
+  a:focus-visible, button:focus-visible { outline:2px solid var(--calm); outline-offset:3px; border-radius:3px; }
+
+  h1,h2,h3 { font-family:var(--display); font-weight:700; text-wrap:balance; margin:0; }
+  h1 { font-size:clamp(2.4rem,6.5vw,4.6rem); line-height:1.02; letter-spacing:-.03em; }
+  h2 { font-size:clamp(1.7rem,4vw,2.6rem); line-height:1.12; letter-spacing:-.022em; }
+  h3 { font-size:1.2rem; letter-spacing:-.01em; margin-bottom:.4rem; }
+
+  .eyebrow { font-family:var(--mono); font-size:.7rem; letter-spacing:.18em;
+             text-transform:uppercase; color:var(--ink-3); margin:0 0 1rem; }
+  .lede { font-size:clamp(1.1rem,2.2vw,1.32rem); color:var(--ink-2); line-height:1.5; }
+
+  section { padding:5rem 0; border-top:1px solid var(--rule); }
+  section:first-of-type { border-top:0; }
+
+  /* ── Hero ─────────────────────────────────────────────── */
+  .hero { padding:5rem 0 3.5rem; }
+  .hero h1 { margin-bottom:1.25rem; }
+  .hero .lede { max-width:44ch; }
+
+  .lab { margin-top:3rem; background:var(--surface); border:1px solid var(--rule);
+         border-radius:6px; box-shadow:var(--shadow); overflow:hidden; }
+  .lab-head { display:flex; flex-wrap:wrap; gap:.75rem 1.5rem; align-items:baseline;
+              justify-content:space-between; padding:1rem 1.25rem; border-bottom:1px solid var(--rule); }
+  .lab-head h3 { font-family:var(--body); font-size:.92rem; font-weight:650; margin:0; }
+  .lab-head p { margin:0; font-size:.82rem; color:var(--ink-3); }
+  .panels { display:grid; grid-template-columns:1fr 1fr; }
+  .panel { padding:1rem 1.25rem 1.25rem; }
+  .panel + .panel { border-left:1px solid var(--rule); }
+  .panel-label { display:flex; align-items:center; gap:.5rem; font-family:var(--mono);
+                 font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; margin-bottom:.6rem; }
+  .dot { width:9px; height:9px; border-radius:50%; flex:none; }
+  .p-calm .dot { background:var(--calm); } .p-calm .panel-label { color:var(--calm); }
+  .p-shock .dot { background:var(--shock); } .p-shock .panel-label { color:var(--shock); }
+  .lab-canvas { padding:1.1rem 1.25rem; border-bottom:1px solid var(--rule); }
+  canvas { width:100%; height:230px; display:block; }
+  .tally { display:flex; align-items:baseline; gap:.5rem; margin-top:.2rem;
+           font-family:var(--mono); font-variant-numeric:tabular-nums; }
+  .tally b { font-size:2.4rem; font-weight:700; line-height:1; }
+  .p-calm .tally b { color:var(--calm); } .p-shock .tally b { color:var(--shock); }
+  .tally span { font-size:.78rem; color:var(--ink-3); }
+  .mini { margin:.55rem 0 0; font-size:.83rem; color:var(--ink-2); line-height:1.45; }
+  .mini b { font-family:var(--mono); font-weight:700; }
+  .lab-foot { padding:.85rem 1.25rem; background:var(--sunken); font-size:.82rem;
+              color:var(--ink-2); display:flex; flex-wrap:wrap; gap:1rem; justify-content:space-between; }
+  .btn { font-family:var(--mono); font-size:.72rem; letter-spacing:.08em; text-transform:uppercase;
+         background:none; border:1px solid var(--rule); color:var(--ink-2); padding:.35em .8em;
+         border-radius:3px; cursor:pointer; }
+  .btn:hover { border-color:var(--ink-3); color:var(--ink); }
+
+  /* ── Números grandes ──────────────────────────────────── */
+  .figs { display:grid; grid-template-columns:repeat(auto-fit,minmax(215px,1fr)); gap:1.25rem; margin:2.5rem 0 0; }
+  .fig { background:var(--surface); border:1px solid var(--rule); border-radius:6px;
+         padding:1.4rem 1.3rem; box-shadow:var(--shadow); }
+  .fig .n { font-family:var(--mono); font-size:2.6rem; font-weight:700; line-height:1;
+            letter-spacing:-.03em; font-variant-numeric:tabular-nums; display:block; margin-bottom:.5rem; }
+  .fig.bad .n { color:var(--shock); } .fig.good .n { color:var(--calm); }
+  .fig p { margin:0; font-size:.9rem; color:var(--ink-2); line-height:1.45; }
+
+  /* ── Gráfico interactivo ──────────────────────────────── */
+  .chart { background:var(--surface); border:1px solid var(--rule); border-radius:6px;
+           box-shadow:var(--shadow); padding:1.25rem; margin-top:2rem; }
+  .chart svg { width:100%; height:auto; display:block; overflow:visible; }
+  .keys { display:flex; flex-wrap:wrap; gap:.5rem; margin-bottom:1rem; }
+  .key { font-family:var(--mono); font-size:.72rem; padding:.32em .7em; border-radius:3px;
+         border:1px solid var(--rule); background:none; color:var(--ink-3); cursor:pointer;
+         display:inline-flex; align-items:center; gap:.42em; }
+  .key i { width:10px; height:3px; border-radius:2px; background:currentColor; display:block; }
+  .key[aria-pressed="true"] { color:var(--ink); border-color:currentColor; font-weight:600; }
+  .cap { font-size:.82rem; color:var(--ink-3); margin:.9rem 0 0; }
+
+  /* ── Barras de capital ────────────────────────────────── */
+  .bars { display:flex; flex-direction:column; gap:.55rem; margin-top:2rem; }
+  .bar { display:grid; grid-template-columns:8.5rem 1fr auto; align-items:center; gap:.9rem;
+         font-family:var(--mono); font-size:.8rem; }
+  .bar .nm { color:var(--ink-2); text-align:right; }
+  .bar .track { background:var(--sunken); border-radius:3px; height:24px; overflow:hidden; }
+  /* scaleX en vez de width: se compone en GPU y no fuerza recálculo de layout.
+     El radio vive en .track, que ya recorta, para que la escala no lo deforme. */
+  .bar .fill { height:100%; width:100%; transform:scaleX(0); transform-origin:left;
+               transition:transform 1.1s cubic-bezier(.2,.7,.3,1); }
+  .bar .vl { font-variant-numeric:tabular-nums; color:var(--ink-2); }
+  .bar.fail .fill { background:var(--shock); } .bar.fail .nm { color:var(--shock); }
+  .bar.pass .fill { background:var(--calm); } .bar.pass .nm { color:var(--calm); }
+
+  /* ── Tarjetas de honestidad ───────────────────────────── */
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:1.1rem; margin-top:2rem; }
+  .card { background:var(--surface); border:1px solid var(--rule); border-radius:6px; padding:1.25rem; box-shadow:var(--shadow); }
+  .card .tag { font-family:var(--mono); font-size:.66rem; letter-spacing:.12em; text-transform:uppercase;
+               color:var(--shock); display:block; margin-bottom:.55rem; }
+  .card p { margin:0; font-size:.88rem; color:var(--ink-2); line-height:1.5; }
+  .card p + p { margin-top:.6rem; color:var(--ink); }
+
+  .steps { counter-reset:s; display:grid; gap:1rem; margin-top:2rem; }
+  .step { display:grid; grid-template-columns:2rem 1fr; gap:1rem; align-items:start; }
+  .step::before { counter-increment:s; content:counter(s); font-family:var(--mono); font-size:.8rem;
+                  color:var(--ink-3); border:1px solid var(--rule); border-radius:50%;
+                  width:2rem; height:2rem; display:grid; place-items:center; }
+  .step p { margin:0; font-size:.92rem; color:var(--ink-2); }
+  .step b { color:var(--ink); font-weight:650; }
+
+  .end { text-align:center; padding:5rem 0 6rem; }
+  .end .links { display:flex; flex-wrap:wrap; gap:.7rem; justify-content:center; margin-top:2rem; }
+  .end .links span { font-family:var(--mono); font-size:.78rem; color:var(--ink-2);
+           padding:.6em 1.1em; border-radius:4px; border:1px solid var(--rule);
+           background:var(--surface); display:inline-flex; align-items:baseline; gap:.45em; }
+  .end .links b { font-size:1.05rem; color:var(--calm); font-weight:700;
+           font-variant-numeric:tabular-nums; }
+  .end .cta { display:flex; flex-wrap:wrap; gap:.7rem; justify-content:center; margin-top:2rem; }
+  .end .cta a { font-family:var(--mono); font-size:.8rem; padding:.75em 1.4em; border-radius:4px;
+           border:1px solid var(--calm); text-decoration:none; color:var(--calm);
+           background:var(--surface); }
+  .end .cta a:first-child { background:var(--calm); color:var(--paper); }
+  .end .cta a:hover { opacity:.85; }
+  .scope { max-width:56ch; margin:2.5rem auto 0; font-size:.82rem; color:var(--ink-3); line-height:1.5; }
+
+  .reveal { opacity:0; transform:translateY(14px); transition:opacity .7s ease, transform .7s ease; }
+  .reveal.in { opacity:1; transform:none; }
+
+  @media (max-width:720px) {
+    .panels { grid-template-columns:1fr; }
+    .panel + .panel { border-left:0; border-top:1px solid var(--rule); }
+    .bar { grid-template-columns:6.5rem 1fr auto; gap:.6rem; font-size:.74rem; }
+    section { padding:3.5rem 0; }
+  }
+  @media (prefers-reduced-motion:reduce) {
+    .reveal { opacity:1; transform:none; transition:none; }
+    .bar .fill { transition:none; }
+    #svgChart path { transition:none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="hero">
+    <p class="eyebrow">Riesgo de mercado · 8 activos · 3,923 días fuera de muestra</p>
+    <h1>El modelo de riesgo equivocado sale más barato.</h1>
+    <p class="lede">Ese es el problema. Comparé 10 formas de medir cuánto puede perder una
+    cartera en un día malo. La peor de todas es la que exige menos capital.</p>
+
+    <div class="lab">
+      <div class="lab-head">
+        <h3>Un mercado que salta, medido por dos modelos</h3>
+        <p>Cada modelo traza la pérdida que, según él, solo se supera 1 día de cada 100. Mil días
+        después, contamos cuántas veces se equivocó.</p>
+      </div>
+      <div class="panel lab-canvas">
+        <canvas id="cSim" aria-label="Simulación de mil días de pérdidas con dos umbrales"></canvas>
+      </div>
+      <div class="panels">
+        <div class="panel p-shock">
+          <div class="panel-label"><span class="dot"></span>Modelo normal</div>
+          <div class="tally"><b id="tNorm">0</b><span>rupturas</span></div>
+          <p class="mini">Prometió <b>10</b>. Supone que los saltos no existen, así que traza la
+          línea demasiado arriba.</p>
+        </div>
+        <div class="panel p-calm">
+          <div class="panel-label"><span class="dot"></span>Modelo con saltos</div>
+          <div class="tally"><b id="tJump">0</b><span>rupturas</span></div>
+          <p class="mini">Prometió <b>10</b>. Reserva sitio para los días raros y su línea aguanta.</p>
+        </div>
+      </div>
+      <div class="lab-foot">
+        <span id="labDays">día 0 de 1,000</span>
+        <button class="btn" id="labBtn">reiniciar</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="reveal">
+    <p class="eyebrow">La pregunta</p>
+    <h2>¿Cuánto capital te cuesta medir mal el riesgo?</h2>
+    <div class="prose" style="margin-top:1.25rem">
+      <p>Un banco tiene que apartar dinero para cubrir sus peores días. Cuánto aparta depende de
+      un modelo estadístico que estima esas pérdidas. Si el modelo se queda corto, el banco anda
+      descubierto sin saberlo.</p>
+      <p>Puse diez modelos a competir sobre quince años de datos reales — incluidos 2008, 2020 y
+      2022 — y los sometí a las mismas pruebas que usa un supervisor. Estos son los números que
+      salieron.</p>
+    </div>
+    <div class="figs">
+      <div class="fig bad"><span class="n" data-to="2.06" data-suf="×">0</span>
+        <p>Las pérdidas graves que el modelo normal <strong>no vio venir</strong>, frente a las que
+        él mismo predijo. Debería ser 1.0.</p></div>
+      <div class="fig good"><span class="n" data-to="0.97" data-suf="×">0</span>
+        <p>El mismo número para el modelo con saltos. Prácticamente perfecto.</p></div>
+      <div class="fig bad"><span class="n" data-to="18.4" data-suf="%">0</span>
+        <p><strong>Menos</strong> capital exige el modelo que reprueba todas las pruebas, frente
+        al mejor calibrado.</p></div>
+    </div>
+  </section>
+
+  <section class="reveal">
+    <p class="eyebrow">Hallazgo 1</p>
+    <h2>Los mercados saltan. El modelo estándar supone que no.</h2>
+    <div class="prose" style="margin-top:1.25rem">
+      <p>Cada modelo promete que sus previsiones fallarán 1 día de cada 100. La línea punteada es
+      esa promesa. Todo lo que quede por encima es un modelo que subestimó el riesgo.</p>
+    </div>
+    <div class="chart">
+      <div class="keys" id="keys" role="group" aria-label="Modelos"></div>
+      <svg id="svgChart" viewBox="0 0 760 300" role="img"
+           aria-label="Fallos acumulados por modelo entre 2011 y 2026"></svg>
+      <p class="cap">Fallos acumulados, cartera equiponderada, 2011–2026. Toca un modelo para
+      mostrarlo u ocultarlo.</p>
+    </div>
+  </section>
+
+  <section class="reveal">
+    <p class="eyebrow">Hallazgo 2</p>
+    <h2>Los sustos que importan son los que ocurren a la vez.</h2>
+    <div class="prose" style="margin-top:1.25rem">
+      <p>Si cada activo salta por su cuenta, repartir el dinero entre ocho los cancela: el
+      promedio se suaviza y la cartera vuelve a parecer tranquila. Lo medí — con saltos
+      independientes, la cola de la cartera es <strong>indistinguible</strong> de la del modelo
+      normal.</p>
+      <p>Lo que no se diversifica es el susto compartido. En marzo de 2020 todo cayó junto. Por
+      eso el modelo acopla los ocho activos a un mismo golpe: sin eso, prometería una protección
+      que no existe.</p>
+      <div class="figs" style="margin-top:2rem">
+        <div class="fig"><span class="n" style="color:var(--ink-3)" data-to="-0.02">0</span>
+          <p>Cuánto se movían juntos dos activos en su peor 1% de días, con saltos independientes.
+          Cero: el modelo decía que no se enteraban uno del otro.</p></div>
+        <div class="fig good"><span class="n" data-to="0.74">0</span>
+          <p>Lo mismo con el susto compartido. Este sí es el orden de magnitud real.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="reveal">
+    <p class="eyebrow">Hallazgo 3 · el incómodo</p>
+    <h2>El sistema premia al modelo que reprueba.</h2>
+    <div class="prose" style="margin-top:1.25rem">
+      <p>El marco histórico castiga a los modelos que fallan mucho: les sube un multiplicador y
+      les exige más capital. La idea es que mentir salga caro.</p>
+      <p>No sale caro. El castigo llega como mucho a un tercio más, mientras que subestimar el
+      riesgo ahorra un quinto de forma directa. La cuenta sale a favor de equivocarse.</p>
+    </div>
+    <div class="bars" id="bars"></div>
+    <p class="cap">Proxy de comparación sobre $10M, bajo el semáforo histórico de VaR. No es una
+    cifra de capital regulatorio — <a href="#alcance">ver alcance</a>.</p>
+  </section>
+
+  <section class="reveal">
+    <p class="eyebrow">Lo que no funcionó</p>
+    <h2>Tres cosas que esperaba y los datos negaron.</h2>
+    <div class="prose" style="margin-top:1.25rem">
+      <p>Están en el repositorio con el mismo detalle que los aciertos. Un proyecto que solo
+      confirma lo que su autor esperaba no probó nada.</p>
+    </div>
+    <div class="cards">
+      <div class="card"><span class="tag">Refutada</span>
+        <p>Que optimizar directamente contra las pérdidas extremas daría una cartera más segura
+        que la clásica.</p>
+        <p>Reparte el dinero de forma medible­mente distinta, y el riesgo realizado sale igual.
+        La caída máxima incluso empeora.</p></div>
+      <div class="card"><span class="tag">Refutada</span>
+        <p>Que reprobar el examen de riesgo saldría caro en capital.</p>
+        <p>Salió al revés, y por un margen amplio. Es el hallazgo central de la página.</p></div>
+      <div class="card"><span class="tag">Corregida</span>
+        <p>Una de mis propias pruebas estadísticas no detectaba el error que debía detectar.</p>
+        <p>La encontré aplicándole el mismo control que a las demás. Al corregirla,
+        <strong>cambió la recomendación final</strong>.</p></div>
+    </div>
+  </section>
+
+  <section class="reveal">
+    <p class="eyebrow">Cómo está hecho</p>
+    <h2>Sin mirar el futuro, y probando cada instrumento antes de usarlo.</h2>
+    <div class="steps prose">
+      <div class="step"><p><b>Solo con lo que se sabía ese día.</b> Cada predicción usa
+      exclusivamente los 1,000 días previos. Nunca se cuela un dato del futuro.</p></div>
+      <div class="step"><p><b>La cartera se rebalancea una vez al mes</b>, el riesgo se mide todos
+      los días. Rebalancear a diario mediría una cartera que nunca existió.</p></div>
+      <div class="step"><p><b>Cada prueba estadística se validó contra datos inventados</b> de
+      respuesta conocida antes de tocar datos reales. Ahí fue donde encontré la que fallaba.</p></div>
+      <div class="step"><p><b>Todo se puede reproducir.</b> Los precios vienen en el repositorio,
+      hay un manifiesto con huellas digitales de cada archivo, y las pruebas corren solas en dos
+      versiones de Python.</p></div>
+    </div>
+  </section>
+
+  <div class="end reveal">
+    <h2>Qué hay detrás de esta página</h2>
+    <p class="lede" style="max-width:48ch;margin:1rem auto 0">Once módulos de Python, 25
+    comprobaciones automáticas y quince años de datos que vienen dentro del repositorio.</p>
+    <div class="links">
+      <span><b>2,100</b> líneas de código</span>
+      <span><b>25</b> comprobaciones</span>
+      <span><b>10</b> modelos de riesgo</span>
+      <span><b>4</b> pruebas estadísticas</span>
+      <span><b>6</b> figuras</span>
+    </div>
+    <div class="cta">
+      <a href="https://github.com/marcoreyess22/jump-risk-engine">Ver el repositorio</a>
+      <a href="https://github.com/marcoreyess22/jump-risk-engine/blob/main/README.es.md">Informe completo</a>
+      <a href="https://github.com/marcoreyess22/jump-risk-engine/blob/main/docs/cv_project_summary.md">Resumen</a>
+    </div>
+    <p class="cap" style="max-width:52ch;margin:1.75rem auto 0;text-align:center">
+    El informe trae todas las tablas y las limitaciones declaradas. El repositorio incluye
+    además un manifiesto con huellas digitales de cada archivo, para reproducir cualquier
+    número de esta página.</p>
+    <p class="scope" id="alcance"><strong>Alcance.</strong> Es un estudio metodológico comparativo,
+    no un cálculo de capital regulatorio ni una implementación del marco vigente (FRTB), que se
+    basa en Expected Shortfall e incorpora elementos fuera de este proyecto. Toda cifra monetaria
+    es un proxy de comparación entre modelos.</p>
+  </div>
+
+</div>
+
+<script>
+const DATA = {"fechas":["2010-12-22","2011-01-24","2011-02-24","2011-03-28","2011-04-28","2011-05-31","2011-06-30","2011-08-02","2011-09-01","2011-10-04","2011-11-03","2011-12-06","2012-01-06","2012-02-08","2012-03-12","2012-04-12","2012-05-14","2012-06-14","2012-07-17","2012-08-16","2012-09-18","2012-10-18","2012-11-21","2012-12-21","2013-01-25","2013-02-27","2013-04-01","2013-05-01","2013-06-03","2013-07-03","2013-08-05","2013-09-05","2013-10-07","2013-11-06","2013-12-06","2014-01-09","2014-02-11","2014-03-14","2014-04-15","2014-05-16","2014-06-18","2014-07-21","2014-08-20","2014-09-22","2014-10-22","2014-11-20","2014-12-23","2015-01-27","2015-02-27","2015-03-31","2015-05-01","2015-06-03","2015-07-06","2015-08-05","2015-09-04","2015-10-07","2015-11-05","2015-12-08","2016-01-11","2016-02-11","2016-03-15","2016-04-15","2016-05-17","2016-06-17","2016-07-20","2016-08-19","2016-09-21","2016-10-21","2016-11-21","2016-12-22","2017-01-26","2017-02-28","2017-03-30","2017-05-02","2017-06-02","2017-07-05","2017-08-04","2017-09-06","2017-10-06","2017-11-06","2017-12-07","2018-01-10","2018-02-12","2018-03-15","2018-04-17","2018-05-17","2018-06-19","2018-07-20","2018-08-21","2018-09-21","2018-10-22","2018-11-21","2018-12-26","2019-01-29","2019-03-01","2019-04-02","2019-05-03","2019-06-05","2019-07-08","2019-08-07","2019-09-09","2019-10-08","2019-11-07","2019-12-10","2020-01-13","2020-02-13","2020-03-17","2020-04-17","2020-05-19","2020-06-19","2020-07-22","2020-08-21","2020-09-22","2020-10-22","2020-11-23","2020-12-24","2021-01-28","2021-03-02","2021-04-01","2021-05-04","2021-06-04","2021-07-07","2021-08-06","2021-09-08","2021-10-07","2021-11-08","2021-12-09","2022-01-11","2022-02-11","2022-03-16","2022-04-18","2022-05-18","2022-06-21","2022-07-22","2022-08-23","2022-09-22","2022-10-24","2022-11-23","2022-12-27","2023-01-30","2023-03-02","2023-04-03","2023-05-04","2023-06-06","2023-07-10","2023-08-09","2023-09-08","2023-10-10","2023-11-09","2023-12-12","2024-01-16","2024-02-15","2024-03-19","2024-04-19","2024-05-21","2024-06-24","2024-07-25","2024-08-23","2024-09-25","2024-10-25","2024-11-26","2024-12-30","2025-02-03","2025-03-06","2025-04-07","2025-05-08","2025-06-10","2025-07-14","2025-08-12","2025-09-12","2025-10-14","2025-11-13","2025-12-16","2026-01-20","2026-02-20","2026-03-24","2026-04-24","2026-05-27","2026-06-29","2026-07-30"],"series":{"normal":[0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,7,8,8,8,9,10,10,10,10,10,11,11,13,13,13,13,13,13,13,13,13,13,13,13,13,13,13,13,16,16,17,17,17,17,17,17,18,20,22,22,22,23,23,24,24,25,26,26,26,26,26,26,34,37,39,40,40,40,41,41,42,42,42,43,44,44,44,44,44,44,44,44,45,45,45,45,45,48,49,49,49,50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,50,51,51,51,51,52,52,52,54,55,55,55,55,55,55,55,55,55,56,58,59,59,61,61],"mc_gbm":[0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,7,8,8,8,9,10,10,10,10,10,11,11,13,13,13,13,13,13,13,13,13,13,13,13,13,13,13,13,16,17,19,19,19,19,20,20,21,23,25,25,25,26,26,27,27,28,29,29,29,29,29,29,37,40,42,43,43,43,44,44,45,45,45,46,47,47,47,47,47,47,47,47,48,48,48,48,48,51,52,52,52,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,53,54,54,54,54,55,55,55,57,58,58,58,58,58,58,58,58,58,59,61,62,62,64,64],"historico":[0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,6,6,6,6,7,8,8,8,8,8,9,9,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,13,13,13,13,13,13,13,13,14,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,22,24,25,26,26,26,26,26,27,27,27,27,27,27,27,27,27,27,27,27,27,27,27,27,27,29,30,30,30,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,31,32,32,32,34,35,35,35,35,35,35,35,35,35,36,38,38,38,40,40],"mc_merton":[0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,7,7,7,7,7,8,8,8,8,8,9,9,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,10,13,13,13,13,13,13,13,13,14,15,16,16,16,16,16,17,17,17,17,17,17,17,17,17,24,26,26,27,27,27,27,27,27,27,27,27,27,27,27,27,27,27,27,27,27,27,27,27,27,27,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,28,29,29,29,31,32,32,32,32,32,32,32,32,32,33,35,35,35,37,37],"fhs":[0,0,1,2,2,3,3,3,5,5,5,5,5,5,5,5,5,5,6,6,6,6,6,6,6,7,7,8,8,9,9,9,9,9,9,9,10,10,10,10,10,10,11,11,12,12,12,12,12,13,13,13,14,14,16,16,16,16,16,16,16,16,16,16,17,17,18,18,18,18,18,18,19,19,19,19,19,20,20,20,20,20,22,22,22,22,22,22,23,23,25,25,25,25,25,25,25,26,26,27,27,27,27,27,27,28,31,31,31,31,31,31,31,31,32,32,32,33,33,33,33,33,33,33,33,33,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,34,35,35,35,36,36,36,36,36,36,36,37,37,37,39,39,39,39,39,39,40,40,40,40,41,41,41,41,42,42],"ewma":[0,0,1,2,2,3,3,3,5,5,5,5,5,5,6,6,6,6,7,7,7,7,8,8,8,9,9,11,12,13,13,13,13,13,13,13,15,15,16,16,16,16,17,17,19,19,20,20,20,21,21,21,22,23,25,25,25,25,25,25,25,25,25,25,26,26,27,27,27,28,28,28,29,29,29,29,29,30,30,30,30,30,33,33,33,33,33,35,36,36,38,39,39,39,39,40,40,42,42,43,44,44,44,44,44,46,52,52,52,53,53,53,54,54,55,55,56,57,58,58,59,59,60,60,62,62,63,64,64,65,65,66,67,67,67,68,68,68,68,68,68,68,68,68,68,69,69,70,70,70,70,71,71,72,73,73,74,74,74,74,74,75,75,76,79,79,79,79,79,79,80,80,80,80,81,83,83,83,84,84]},"esperado":[0.01,0.22,0.44,0.66,0.88,1.1,1.32,1.54,1.76,1.98,2.2,2.42,2.63,2.85,3.07,3.29,3.51,3.73,3.95,4.17,4.39,4.61,4.83,5.04,5.26,5.48,5.7,5.92,6.14,6.36,6.58,6.8,7.02,7.24,7.45,7.67,7.89,8.11,8.33,8.55,8.77,8.99,9.21,9.43,9.65,9.86,10.08,10.3,10.52,10.74,10.96,11.18,11.4,11.62,11.84,12.06,12.27,12.49,12.71,12.93,13.15,13.37,13.59,13.81,14.03,14.25,14.47,14.69,14.9,15.12,15.34,15.56,15.78,16.0,16.22,16.44,16.66,16.88,17.1,17.31,17.53,17.75,17.97,18.19,18.41,18.63,18.85,19.07,19.29,19.51,19.72,19.94,20.16,20.38,20.6,20.82,21.04,21.26,21.48,21.7,21.92,22.13,22.35,22.57,22.79,23.01,23.23,23.45,23.67,23.89,24.11,24.33,24.54,24.76,24.98,25.2,25.42,25.64,25.86,26.08,26.3,26.52,26.74,26.96,27.17,27.39,27.61,27.83,28.05,28.27,28.49,28.71,28.93,29.15,29.37,29.58,29.8,30.02,30.24,30.46,30.68,30.9,31.12,31.34,31.56,31.78,31.99,32.21,32.43,32.65,32.87,33.09,33.31,33.53,33.75,33.97,34.19,34.4,34.62,34.84,35.06,35.28,35.5,35.72,35.94,36.16,36.38,36.6,36.81,37.03,37.25,37.47,37.69,37.91,38.13,38.35,38.57,38.79,39.01,39.23],"n":3923,"tabla":{"historico":{"razon":1.2,"pers":12.5,"capital":518,"pasa":6},"normal":{"razon":1.78,"pers":7.0,"capital":465,"pasa":0},"mc_gbm":{"razon":1.79,"pers":7.0,"capital":466,"pasa":0},"mc_merton":{"razon":0.96,"pers":20.4,"capital":550,"pasa":8},"mc_merton_idio":{"razon":1.37,"pers":9.5,"capital":485,"pasa":2},"t_student":{"razon":1.08,"pers":12.1,"capital":550,"pasa":7},"cornish_fisher":{"razon":0.68,"pers":29.6,"capital":692,"pasa":6},"evt":{"razon":1.08,"pers":14.4,"capital":531,"pasa":6},"ewma":{"razon":2.04,"pers":3.6,"capital":446,"pasa":1},"fhs":{"razon":1.22,"pers":7.5,"capital":502,"pasa":5}}};
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+/* ── Laboratorio: una realidad, dos umbrales ────────────────────────────
+   Un solo mercado con saltos. El modelo normal traza su umbral al 1% de una
+   gaussiana (−2.326σ); el de saltos, en el cuantil 1% VERDADERO de esta
+   distribución (−3.62σ).
+
+   Parámetros elegidos para reproducir el hallazgo real del proyecto, no para
+   ilustrarlo: con λ=0.10 y σ_J=2.8 el umbral gaussiano se rompe ~1.99 veces
+   más de lo prometido, contra el 2.06× medido sobre datos reales. Verificado
+   con 4 millones de extracciones antes de fijarlos aquí.                     */
+const ND = 1000, TH_NORM = 2.326, TH_JUMP = 3.62;
+const LAM = 0.10, SJ = 2.8, SD_J = Math.sqrt(1 - LAM*SJ*SJ);
+
+function gauss(){ let u=0,v=0; while(!u)u=Math.random(); while(!v)v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+function drawDay(){
+  let x = SD_J*gauss();
+  let n = 0, L = Math.exp(-LAM);
+  for(let p=Math.random(); p>L; n++) p*=Math.random();
+  for(let i=0;i<n;i++) x += SJ*gauss();
+  return x;
+}
+
+const cv = document.getElementById("cSim");
+const tNorm = document.getElementById("tNorm"), tJump = document.getElementById("tJump");
+const labDays = document.getElementById("labDays");
+let pts = [], hitN = 0, hitJ = 0, ctx, CW, CH = 230, raf = null;
+
+function fit(){
+  const r = cv.getBoundingClientRect(), d = devicePixelRatio||1;
+  cv.width = r.width*d; cv.height = CH*d;
+  ctx = cv.getContext("2d"); ctx.setTransform(d,0,0,d,0,0); CW = r.width; render();
+}
+function reset(){ pts = []; hitN = hitJ = 0; tNorm.textContent = tJump.textContent = "0"; fit(); }
+function step(){
+  if(pts.length >= ND) return false;
+  const x = drawDay(); pts.push(x);
+  if(x < -TH_NORM){ hitN++; tNorm.textContent = hitN; }
+  if(x < -TH_JUMP){ hitJ++; tJump.textContent = hitJ; }
+  return true;
+}
+function render(){
+  if(!ctx) return;
+  // Reparto asimétrico a propósito: 2.6σ de aire arriba y ~5.9σ abajo. La
+  // historia está en la cola inferior, pero sin margen suficiente arriba los
+  // retornos positivos se dibujaban fuera del lienzo.
+  const top = 14, ARRIBA = 2.6, ABAJO = 5.9;
+  const sc = (CH-top-10)/(ARRIBA+ABAJO), mid = top + ARRIBA*sc;
+  const clamp = v => Math.max(-ABAJO, Math.min(ARRIBA, v));
+  ctx.clearRect(0,0,CW,CH);
+  const yN = mid + TH_NORM*sc, yJ = mid + TH_JUMP*sc;
+
+  ctx.fillStyle = css("--shock-w"); ctx.globalAlpha = .55;
+  ctx.fillRect(0, yN, CW, yJ-yN); ctx.globalAlpha = 1;
+
+  ctx.lineWidth = 1.4; ctx.setLineDash([5,4]);
+  [[yN,"--shock","modelo normal"],[yJ,"--calm","modelo con saltos"]].forEach(([y,c,t])=>{
+    ctx.strokeStyle = css(c); ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(CW,y); ctx.stroke();
+    ctx.setLineDash([]); ctx.fillStyle = css(c);
+    ctx.font = "500 11px ui-monospace, monospace"; ctx.textAlign = "right";
+    ctx.fillText(t, CW-4, y-6); ctx.setLineDash([5,4]);
+  });
+  ctx.setLineDash([]);
+
+  const stp = CW/ND;
+  ctx.strokeStyle = css("--ink-3"); ctx.globalAlpha = .45; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for(let k=0;k<pts.length;k++){ const x = k*stp;
+    ctx.moveTo(x, mid); ctx.lineTo(x, mid + clamp(pts[k])*sc); }
+  ctx.stroke(); ctx.globalAlpha = 1;
+
+  for(let k=0;k<pts.length;k++){
+    if(pts[k] >= -TH_NORM) continue;
+    ctx.fillStyle = css(pts[k] < -TH_JUMP ? "--calm" : "--shock");
+    ctx.beginPath(); ctx.arc(k*stp, mid + clamp(pts[k])*sc, 2.6, 0, 6.284); ctx.fill();
+  }
+}
+function run(){
+  let alive = false;
+  for(let s=0;s<7;s++) if(step()) alive = true;
+  render();
+  labDays.textContent = `día ${pts.length.toLocaleString("es")} de 1,000`;
+  raf = alive ? requestAnimationFrame(run) : null;
+}
+function restart(){
+  if(raf) cancelAnimationFrame(raf);
+  reset();
+  if(reduce){ while(step()); render(); labDays.textContent = "día 1,000 de 1,000"; }
+  else run();
+}
+document.getElementById("labBtn").addEventListener("click", restart);
+addEventListener("resize", fit);
+restart();
+
+/* ── Gráfico de fallos acumulados ───────────────────────────────────── */
+const NOMBRES = {normal:"normal", mc_gbm:"gaussiano MC", historico:"histórico",
+                 mc_merton:"con saltos", fhs:"volatilidad reciente", ewma:"solo volatilidad"};
+const COLS = {normal:"--shock", mc_gbm:"--shock", ewma:"--shock",
+              historico:"--ink-3", fhs:"--ink-3", mc_merton:"--calm"};
+const activos = new Set(["normal","mc_merton","historico"]);
+const svg = document.getElementById("svgChart"), keys = document.getElementById("keys");
+const NS = "http://www.w3.org/2000/svg";
+const el = (t,a) => { const e = document.createElementNS(NS,t);
+  for(const k in a) e.setAttribute(k,a[k]); return e; };
+
+Object.keys(DATA.series).forEach(m => {
+  const b = document.createElement("button");
+  b.className = "key"; b.type = "button";
+  b.setAttribute("aria-pressed", activos.has(m));
+  b.style.color = css(COLS[m]);
+  b.innerHTML = `<i></i>${NOMBRES[m]}`;
+  b.onclick = () => { activos.has(m) ? activos.delete(m) : activos.add(m);
+    b.setAttribute("aria-pressed", activos.has(m)); paint(); };
+  keys.appendChild(b);
+});
+
+function paint(){
+  const W = 760, H = 300, L = 42, R = 12, T = 14, B = 30;
+  const iw = W-L-R, ih = H-T-B;
+  const max = Math.max(90, ...[...activos].map(m => Math.max(...DATA.series[m])));
+  const X = i => L + i*iw/(DATA.fechas.length-1);
+  const Y = v => T + ih - v*ih/max;
+  svg.textContent = "";
+  [0, max/2, max].forEach(v => {
+    svg.appendChild(el("line",{x1:L,x2:W-R,y1:Y(v),y2:Y(v),stroke:css("--rule"),"stroke-width":1}));
+    const t = el("text",{x:L-8,y:Y(v)+4,"text-anchor":"end",fill:css("--ink-3"),
+      "font-size":11,"font-family":"ui-monospace, monospace"});
+    t.textContent = Math.round(v); svg.appendChild(t);
+  });
+  const dExp = DATA.esperado.map((v,i)=>`${i?"L":"M"}${X(i)},${Y(v)}`).join("");
+  svg.appendChild(el("path",{d:dExp,fill:"none",stroke:css("--ink"),"stroke-width":1.6,
+    "stroke-dasharray":"5 4","opacity":.65}));
+  const lbl = el("text",{x:X(DATA.fechas.length-1)-4,y:Y(DATA.esperado.at(-1))-8,
+    "text-anchor":"end",fill:css("--ink-2"),"font-size":11,"font-family":"ui-monospace, monospace"});
+  lbl.textContent = "lo prometido"; svg.appendChild(lbl);
+
+  [...activos].forEach(m => {
+    const d = DATA.series[m].map((v,i)=>`${i?"L":"M"}${X(i)},${Y(v)}`).join("");
+    const p = el("path",{d,fill:"none",stroke:css(COLS[m]),"stroke-width":2.2,
+      "stroke-linejoin":"round"});
+    if(!reduce){ const len = 2600; p.style.strokeDasharray = len; p.style.strokeDashoffset = len;
+      p.style.transition = "stroke-dashoffset 1.2s ease"; requestAnimationFrame(()=>p.style.strokeDashoffset=0); }
+    svg.appendChild(p);
+    const t = el("text",{x:X(DATA.fechas.length-1)+2,y:Y(DATA.series[m].at(-1))+4,
+      fill:css(COLS[m]),"font-size":11,"font-family":"ui-monospace, monospace","text-anchor":"end"});
+    t.textContent = DATA.series[m].at(-1); svg.appendChild(t);
+  });
+  [0, 90, 179].forEach(i => {
+    const t = el("text",{x:X(i),y:H-8,"text-anchor":i?(i>150?"end":"middle"):"start",
+      fill:css("--ink-3"),"font-size":11,"font-family":"ui-monospace, monospace"});
+    t.textContent = DATA.fechas[i].slice(0,4); svg.appendChild(t);
+  });
+}
+paint();
+// El canvas y el SVG pintan con los tokens resueltos, así que al cambiar de
+// tema hay que repintarlos: el CSS solo no los alcanza.
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { paint(); render(); });
+
+/* ── Barras de capital ──────────────────────────────────────────────── */
+const ORD = ["mc_gbm","normal","ewma","fhs","mc_merton","cornish_fisher"];
+const barsEl = document.getElementById("bars");
+const maxCap = Math.max(...ORD.map(m => DATA.tabla[m].capital));
+ORD.forEach(m => {
+  const t = DATA.tabla[m], ok = t.pasa >= 5;
+  const d = document.createElement("div");
+  d.className = "bar " + (ok ? "pass" : "fail");
+  d.innerHTML = `<span class="nm">${NOMBRES[m]||m}</span>
+    <span class="track"><span class="fill" data-w="${t.capital/maxCap*100}"></span></span>
+    <span class="vl">$${t.capital}k</span>`;
+  barsEl.appendChild(d);
+});
+
+/* ── Revelado y conteo ──────────────────────────────────────────────── */
+const io = new IntersectionObserver(es => es.forEach(e => {
+  if(!e.isIntersecting) return;
+  e.target.classList.add("in");
+  e.target.querySelectorAll("[data-to]").forEach(n => {
+    const to = parseFloat(n.dataset.to), suf = n.dataset.suf||"";
+    // Los decimales salen de cómo está escrito el objetivo: 18.4 no debe
+    // convertirse en 18.40 solo por no ser entero.
+    const dec = (n.dataset.to.split(".")[1] || "").length;
+    if(reduce){ n.textContent = to.toFixed(dec)+suf; return; }
+    const t0 = performance.now();
+    (function tick(t){ const k = Math.min(1,(t-t0)/900), e2 = 1-Math.pow(1-k,3);
+      n.textContent = (to*e2).toFixed(dec)+suf;
+      if(k<1) requestAnimationFrame(tick); })(t0);
+  });
+  e.target.querySelectorAll(".fill").forEach(f => f.style.transform = `scaleX(${f.dataset.w/100})`);
+  io.unobserve(e.target);
+}), {threshold:.18});
+document.querySelectorAll(".reveal").forEach(s => io.observe(s));
+</script>

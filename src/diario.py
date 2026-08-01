@@ -108,12 +108,19 @@ def main() -> None:
     print(f"\n{'═' * 62}\n  MOTOR DE RIESGO — corrida diaria\n{'═' * 62}\n")
 
     # ── 1. Datos
+    # El motor diario escribe en SU PROPIA caché. Refrescar data/prices.csv
+    # invalidaría en silencio todas las tablas publicadas: ese archivo está
+    # versionado, su hash vive en el manifiesto, y el proveedor reajusta la
+    # historia completa al aplicar un dividendo — un refresco no añade un día,
+    # cambia los 4,900 anteriores.
     if a.sin_descarga:
-        print("  datos: caché local (--sin-descarga)")
+        fuente = data.CACHE_VIVO if data.CACHE_VIVO.exists() else data.CACHE
+        print(f"  datos: caché local ({fuente.name}, --sin-descarga)")
+        px = data.load_prices(cache=fuente)
     else:
-        print("  datos: refrescando desde el proveedor...")
-        data.load_prices(refresh=True)
-    rets = data.log_returns()
+        print("  datos: refrescando desde el proveedor → data/prices_live.csv")
+        px = data.load_prices(refresh=True, cache=data.CACHE_VIVO)
+    rets = data.log_returns(px)
     hoy = rets.index[-1]
     print(f"  último cierre disponible: {hoy.date()}  ({len(rets):,} días)\n")
 
