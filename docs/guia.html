@@ -89,6 +89,8 @@
     color: var(--ink-faint);
     margin: 0 0 .75rem;
   }
+  .eyebrow a { color: var(--accent); text-decoration: none; }
+  .eyebrow a:hover { text-decoration: underline; }
 
   h1 {
     font-size: clamp(2.1rem, 5vw, 3.1rem);
@@ -285,7 +287,7 @@
 <div class="wrap">
 
   <header class="prose">
-    <p class="eyebrow">Guía técnica · jump-risk-engine</p>
+    <p class="eyebrow"><a href="./">← Presentación del proyecto</a> · guía técnica</p>
     <h1>Motor de asignación y riesgo con saltos</h1>
     <p class="lede">Cómo está construido, qué hace cada módulo y cómo correrlo tú mismo.
     Un pipeline que va de precios crudos a un veredicto regulatorio, pasando por cálculo
