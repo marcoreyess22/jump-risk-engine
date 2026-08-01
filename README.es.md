@@ -341,8 +341,8 @@ atribución causal. Corre `make report` para verlo.
 ## Reproducir
 
 ```bash
-pip install -r requirements.txt
-python tests/test_core.py      # 21 checks de validación, ~4 min
+pip install -e ".[data]"       # sin [data] corre 100% offline desde el CSV cacheado
+python tests/test_core.py      # 25 checks de validación, ~4 min
 python -m src.backtest         # walk-forward, 10 modelos × 4 carteras, ~8 min
 python -m src.basel            # semáforo de capital y backtest de ES
 python -m src.plots            # figuras

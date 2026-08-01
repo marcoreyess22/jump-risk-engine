@@ -417,7 +417,7 @@
     </div>
 
     <div class="term"><pre><span class="dim"># instalación, una vez</span>
-<span class="cmd">pip install -r requirements.txt</span>
+<span class="cmd">pip install -e ".[data]"</span>   <span class="dim">sin [data] corre offline desde el CSV cacheado</span>
 
 <span class="dim"># módulos rápidos — corre estos primero</span>
 <span class="cmd">python -m src.data</span>       <span class="dim">0.3 s   perfil de los 8 activos</span>

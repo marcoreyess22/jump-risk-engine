@@ -331,8 +331,8 @@ attribution. Run `make report` for the diagnostic.
 ## Reproducing
 
 ```bash
-pip install -r requirements.txt
-python tests/test_core.py      # 21 validation checks, ~4 min
+pip install -e ".[data]"       # omit [data] to run fully offline from the cached CSV
+python tests/test_core.py      # 25 validation checks, ~4 min
 python -m src.backtest         # walk-forward, 10 models × 4 portfolios, ~8 min
 python -m src.basel            # capital traffic light and ES backtest
 python -m src.plots            # figures
