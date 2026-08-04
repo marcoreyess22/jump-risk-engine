@@ -49,7 +49,8 @@
       "ewma",
       "fhs",
       "mc_merton_ewma",
-      "fhs_merton"
+      "fhs_merton",
+      "garch_t"
     ],
     "carteras": [
       "min_cvar",
@@ -78,12 +79,12 @@
       "bytes": 772040
     },
     "data/walkforward.csv": {
-      "sha256": "bdede4ee2bdb476bc2d2a634b00bc5835d6f898360d19d69520630c56a685bf4",
-      "bytes": 18942736
+      "sha256": "e28b4933411fe4d3d1327e7fe11cea34d1c2ab925c3ae234fd9bbf0e269ece1a",
+      "bytes": 21438451
     },
     "data/tabla_maestra.csv": {
-      "sha256": "f34fec9c783b9e41357839f6a785cc41c8916890b2fc6eb042b2d4748b63ef8a",
-      "bytes": 1048
+      "sha256": "eb967111141b97dbaec07dcf2dde1de3ce8eb22a0592b81b28b6df20c4d0c136",
+      "bytes": 1123
     },
     "src/data.py": {
       "sha256": "075fc1eabff77f3aa3e5b4bcb8475ba157394f7e6dc61f93752db5f977a923fb",
@@ -98,24 +99,24 @@
       "bytes": 5448
     },
     "src/risk.py": {
-      "sha256": "542c31e327db73532f376d2d7ca43cf23c9ad994eebdcf766b87a3828d9d5d83",
-      "bytes": 17428
+      "sha256": "c0a9a4fc574008cf5657d2d36c4288ec4463472a3e6a49ad3eae2f8973d86e2e",
+      "bytes": 21641
     },
     "src/backtest.py": {
-      "sha256": "f70527fe9fafb0efbbd9f52746fc91eefc9f55d06d8999c4547f199601c20b98",
-      "bytes": 10604
+      "sha256": "4f832354fc8bfa6f7c247c0c9024a3c4e8f6f1b5c943163a3a468fbac7c50632",
+      "bytes": 11039
     },
     "src/basel.py": {
       "sha256": "1f22eaf3c4cc786609b94aed87c448f89db5023ebc0099638f71d00735dd2a0a",
       "bytes": 7538
     },
     "src/plots.py": {
-      "sha256": "7d9eb0bbffd88f85ee76c8f5c9c5bf5c4ceb9597c50a011473804d329452c873",
-      "bytes": 8364
+      "sha256": "8fa560ec6782e8dda73a5bbacc11fb7fea0eb7b371ce9420757333d21dc59c6c",
+      "bytes": 8465
     },
     "tests/test_core.py": {
-      "sha256": "edddefe4664602dee19d417b5ead69570d8279031a652d23eb438d74590c49ff",
-      "bytes": 37795
+      "sha256": "6e65f4efdbd5461685b76e6ba4ac8bb8db7d1b6451b20af45e7fe86d3bafae8a",
+      "bytes": 41182
     }
   }
 }

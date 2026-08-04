@@ -861,6 +861,78 @@ def test_reproducibilidad_flujos_independientes():
     print("  OK  flujos separados por nombre y por día, estables entre procesos")
 
 
+def test_garch_recupera_sus_propios_parametros():
+    """Un GARCH escrito a mano solo vale si reencuentra parámetros conocidos.
+
+    Se simula desde valores fijados, se ajusta, y se comprueba que la
+    persistencia y los grados de libertad vuelven. La persistencia es la que
+    gobierna el agrupamiento —lo que el modelo existe para capturar—, así que es
+    la que se exige apretada; omega y alfa son notoriamente difíciles de separar
+    y se toleran más flojos.
+    """
+    rng = np.random.default_rng(0)
+    verdad = dict(omega=2e-6, alfa=0.09, beta=0.88, nu=6.0)
+    n = 4000
+    s2 = np.empty(n + 1)
+    s2[0] = verdad["omega"] / (1 - verdad["alfa"] - verdad["beta"])
+    r = np.empty(n)
+    esc = np.sqrt((verdad["nu"] - 2) / verdad["nu"])
+    for t in range(n):
+        r[t] = np.sqrt(s2[t]) * esc * rng.standard_t(verdad["nu"])
+        s2[t + 1] = verdad["omega"] + verdad["alfa"] * r[t] ** 2 + verdad["beta"] * s2[t]
+
+    f = risk.ajustar_garch(r)
+    pers_real = verdad["alfa"] + verdad["beta"]
+    assert abs(f["persistencia"] - pers_real) < 0.02, f["persistencia"]
+    assert abs(f["nu"] / verdad["nu"] - 1) < 0.35, f["nu"]
+    assert f["persistencia"] < 1, "GARCH no estacionario"
+
+    # El filtro IIR debe dar exactamente lo mismo que la recursión explícita.
+    lento = np.empty(n + 1)
+    lento[0] = r.var(ddof=1)
+    for t in range(n):
+        lento[t + 1] = f["omega"] + f["alfa"] * r[t] ** 2 + f["beta"] * lento[t]
+    rapido = risk._garch_var(r, f["omega"], f["alfa"], f["beta"])
+    assert np.allclose(lento, rapido, rtol=1e-9), np.abs(lento - rapido).max()
+
+    print(f"  OK  persistencia {pers_real:.3f} → {f['persistencia']:.3f}, "
+          f"nu {verdad['nu']:.1f} → {f['nu']:.1f}")
+    print("  OK  el filtro IIR reproduce la recursión explícita (rtol 1e-9)")
+
+
+def test_rotacion_se_mide_solo_al_rebalancear():
+    """La rotación es media suma de |Δw| y solo el día del rebalanceo.
+
+    Media suma porque vender A para comprar B es UNA operación, no dos. Y solo
+    al rebalancear porque entre rebalanceos los pesos no se tocan: cobrar costos
+    a diario inventaría un gasto que nadie hizo.
+    """
+    rets = data.log_returns().iloc[-1120:]
+    df = bt.walk_forward(rets, ventana=1000, verbose=False,
+                         carteras=["min_cvar", "min_var", "igual_peso"],
+                         modelos=["normal"])
+    r = df.drop_duplicates(["fecha", "cartera"])
+
+    assert "rotacion" in df.columns
+    # Peso igual nunca rota: sus pesos no dependen de la ventana.
+    assert r[r.cartera == "igual_peso"].rotacion.abs().max() == 0
+
+    # Las carteras optimizadas rotan, y solo en unos pocos días.
+    for c in ("min_cvar", "min_var"):
+        nz = r[(r.cartera == c) & (r.rotacion > 0)]
+        assert len(nz), f"{c} nunca rotó"
+        assert len(nz) < len(r[r.cartera == c]) / 10, "rota demasiados días"
+        assert (nz.rotacion <= 1.0).all(), "rotación > 100% es imposible"
+
+    # La que optimiza la cola rota más que la que optimiza varianza: es el
+    # motivo por el que los costos la castigan más.
+    rc = r[(r.cartera == "min_cvar") & (r.rotacion > 0)].rotacion.mean()
+    rv = r[(r.cartera == "min_var") & (r.rotacion > 0)].rotacion.mean()
+    assert rc > rv, f"min_cvar {rc:.3f} no rota más que min_var {rv:.3f}"
+
+    print(f"  OK  igual_peso rota 0; min_cvar {rc:.1%} vs min_var {rv:.1%} por rebalanceo")
+
+
 if __name__ == "__main__":
     fallos = 0
     for nombre, fn in sorted(globals().items()):

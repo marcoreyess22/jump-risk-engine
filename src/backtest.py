@@ -153,13 +153,20 @@ def walk_forward(rets: pd.DataFrame, ventana: int = VENTANA, nivel: float = NIVE
         modelos_sel = {k: (partial(v, lam=lam) if k == "mc_merton" else v)
                        for k, v in modelos_sel.items()}
 
+    # La rotación se mide SOLO en el día de rebalanceo y es media suma de
+    # |w_nuevo - w_viejo|: comprar A y vender B es una operación, no dos.
     filas, w_act, mes_prev, n_reb, n_fallos = [], {}, None, 0, 0
+    rot_hoy: dict[str, float] = {}
     for t in range(ventana - 1, T - 1):
         win = X[t - ventana + 1 : t + 1]
         mes = (idx[t].year, idx[t].month)
+        rot_hoy = {}
         if mes != mes_prev:
             for cn, cf in carteras_sel.items():
-                w_act[cn] = cf(win, _flujo(semilla, f"cartera:{cn}", t))
+                w_new = cf(win, _flujo(semilla, f"cartera:{cn}", t))
+                rot_hoy[cn] = (0.0 if cn not in w_act
+                               else float(np.abs(w_new - w_act[cn]).sum() / 2))
+                w_act[cn] = w_new
             mes_prev, n_reb = mes, n_reb + 1
             if verbose and n_reb % 24 == 0:
                 print(f"  ... {idx[t].date()}  ({n_reb} rebalanceos)", flush=True)
@@ -176,10 +183,11 @@ def walk_forward(rets: pd.DataFrame, ventana: int = VENTANA, nivel: float = NIVE
                 except risk.CalibrationInfeasible as err:
                     var, es, estado = np.nan, np.nan, f"calibracion_infactible: {err}"
                     n_fallos += 1
-                filas.append((idx[t + 1], cn, mn, var, es, realizado, estado))
+                filas.append((idx[t + 1], cn, mn, var, es, realizado, estado,
+                              rot_hoy.get(cn, 0.0)))
 
     df = pd.DataFrame(filas, columns=["fecha", "cartera", "modelo", "VaR", "ES",
-                                      "realizado", "estado_modelo"])
+                                      "realizado", "estado_modelo", "rotacion"])
     # Una fila sin VaR no puede declarar excepción: queda NaN, no 0. Contarla
     # como "sin excepción" sesgaría a la baja el conteo del modelo que falló.
     df["excepcion"] = np.where(df["VaR"].isna(), np.nan,

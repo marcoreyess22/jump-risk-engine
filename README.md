@@ -6,7 +6,7 @@
 
 **Less. That's the problem.**
 
-An audit of **12 VaR/ES specifications × 4 portfolios** across 8 asset classes and 3,923
+An audit of **13 VaR/ES specifications × 4 portfolios** across 8 asset classes and 3,923
 out-of-sample days (2011–2026), validated with Kupiec, Christoffersen, Acerbi–Székely, and the
 Basel capital traffic light.
 
@@ -19,25 +19,29 @@ Basel capital traffic light.
 | | |
 |---|---|
 | **Gaussian VaR produces 2.06× the expected exceptions** | Fails Kupiec, conditional coverage, and the ES backtest in all 4 portfolios |
-| **Jump-diffusion VaR produces 0.97×** | Best frequency calibration of the ten |
+| **Jump-diffusion VaR produces 0.97×** | Best frequency calibration of the thirteen |
 | **39 of 40 combinations fail the independence test** | After an exception, the probability of another multiplies by 16 |
-| **No model gets frequency, timing, and magnitude right at once** | The best on frequency is nearly the worst on clustering, and vice versa |
+| **At 99% no model gets all three axes right — at 95% two do** | The 99% verdict was a power artefact: 39 expected exceptions cannot resolve what 196 make obvious |
 | **The model that fails everything costs 18.4% LESS capital** | The traffic-light penalty doesn't offset what underestimating saves |
 | **CVaR optimization did not reduce realized tail loss** | Allocates 10 pp differently from mean-variance, for +0.1% CVaR |
 
-**Recommendation.** Adopt **`mc_merton`** as the risk specification. Of the ten it is the only
-one that gets both the *frequency* of extreme losses right (0.96×, the best calibrated) and
-their *magnitude* (passes the Expected Shortfall backtest in all 4 portfolios) — and magnitude
-is what the current framework measures, since FRTB's Internal Models Approach is built on
-Expected Shortfall rather than VaR.
+**Recommendation — and it depends on the level, which is the finding.**
 
-Its weakness is real and worth stating: **it does not model volatility clustering**, so its
-exceptions bunch during crises. That extension has since been built — see
-[Act 3](#act-3--closing-the-gap-the-project-left-open). `mc_merton_ewma` halves the clustering
-and keeps the perfect ES record at a lower capital multiplier, but turns systematically
-conservative on frequency (0.72× against 0.94×). The two tie at 8/16 and neither dominates:
-**no model in the set solves all three axes.** Pick `mc_merton` if frequency accuracy matters
-most, `mc_merton_ewma` if clustering does.
+**At 99%**, adopt **`mc_merton`**. It is the only specification that gets both the *frequency* of
+extreme losses right (0.94×, the best calibrated) and their *magnitude* (passes the Expected
+Shortfall backtest in all 4 portfolios) — and magnitude is what the current framework measures,
+since FRTB's Internal Models Approach is built on Expected Shortfall rather than VaR. Its
+exceptions still bunch during crises, and at this level nothing fixes that.
+
+**At 95%**, adopt **`fhs` or `garch_t`**. Both score 12 of 12: frequency, timing and magnitude,
+across all four portfolios. And `mc_merton` collapses to 2 of 12 here, because a model tuned for
+the extreme 1% overstates the shoulder of the distribution.
+
+**No model is correct — models are correct at a level.** Choosing a specification without fixing
+the confidence level first is choosing wrong. See
+[Act 4](#act-4--the-confidence-level-was-deciding-the-conclusion), which also shows the earlier
+"nothing fixes the timing" verdict was a statistical-power artefact rather than a property of the
+models.
 
 And do not treat the Basel traffic light as a sufficient approval criterion: on this data it
 **economically rewards the models it fails**. The practical conclusion is not to tune the model
@@ -68,7 +72,7 @@ leaves every marginal unchanged — tail dependence comes for free, with no reca
 would invalidate the measurement: the VaR would be measuring a portfolio that never existed for
 a full day.
 
-**Ten specifications.** Five unconditional with flat variance (`historico`, `normal`, `mc_gbm`,
+**Thirteen specifications.** Five unconditional with flat variance (`historico`, `normal`, `mc_gbm`,
 `mc_merton`, `mc_merton_idio`), three with non-Gaussian tails but flat variance (`t_student`,
 `cornish_fisher`, `evt`), and two with conditional volatility (`ewma`, `fhs`). All register
 under a single signature `(returns, weights, level, rng) → (VaR, ES)`, so the backtest loop
@@ -92,7 +96,7 @@ that pair) and power now rises with severity: 1/60 under H₀, 12/60 on t(6) dat
 
 ## Act 1 — the diagnosis
 
-*(Five unconditional specifications. Act 2 extends to ten and qualifies the conclusion.)*
+*(Five unconditional specifications. Act 2 extends the set and qualifies the conclusion.)*
 
 ### 1. Jumps fix the exception frequency
 
@@ -265,6 +269,72 @@ fit. It stays in the registry, documented, rather than being quietly dropped.
 
 ---
 
+## Act 4 — the confidence level was deciding the conclusion
+
+Act 3 closed on the gap having *narrowed but not closed*: no model got frequency, timing and
+magnitude right at once. That conclusion turned out to be **an artefact of statistical power**,
+not a finding about the models.
+
+At 99% there are ~39 expected exceptions in 3,923 days. At 95% there are **196 — five times as
+many**. Running the same backtest at that level changes no model; it changes what the tests can
+see.
+
+| | 99% | 95% |
+|---|---|---|
+| Mean width of the bootstrap CI on the ratio | 0.94 | **0.38** |
+| Independence: **conditional** models | 2 of 20 | **18 of 20** |
+| Independence: **unconditional** models | 0 of 32 | **0 of 32** |
+| Persistence, conditional | 3.4 – 10.5 | **1.3 – 1.4** |
+| Persistence, unconditional | 6.3 – 29.3 | 2.5 – 2.7 |
+
+The separation at 95% is total: **every one of the five conditional-volatility models passes
+independence and none of the eight without it does.** Their persistence falls to 1.3, which is
+essentially 1.0 — clustering gone.
+
+The question Act 2 opened — *does conditioning on volatility fix independence?* — has an
+unambiguous answer. At 99% the test simply lacked the power to see it.
+
+**Two models get all three axes right at 95%:** `fhs` and `garch_t`, both 12 of 12 across the
+four portfolios. And the ordering inverts against 99%: `mc_merton`, the best calibrated in the
+extreme tail, drops to 2 of 12 because it overstates the shoulder of the distribution.
+
+**No model is correct: models are correct at one level or another.** Merton describes the
+extreme 1% well and the 5% badly; the conditional models, the reverse. Choosing a model without
+fixing the level first is choosing wrong.
+
+### GARCH(1,1)-t
+
+The project had excluded GARCH on cost — refitting it means ~15,700 estimations. It was solved
+by computing the variance recursion with an **IIR filter** rather than a loop: the recursion is
+exactly a one-pole filter and `lfilter` evaluates it in C. From 51 ms per fit to 3.5 ms, and
+from 9.7 minutes to 1.2 across the whole walk-forward.
+
+Against EWMA, persistence is **estimated** rather than fixed at 0.94, and the tails are Student-t
+rather than Gaussian — which was what sank `ewma` on frequency (2.09×) despite its good timing
+behaviour. `garch_t` gives 1.02× at 95% with 12 of 12.
+
+It is hand-written rather than pulling in a dependency, which obliges proving it works: it is
+validated by **parameter recovery** on series simulated from known values (persistence 0.970 →
+0.964).
+
+### Transaction costs
+
+Measured as half the sum of |Δw| on the rebalance day, over 15.6 years:
+
+| portfolio | annual turnover | gross | net at 10 bp | CVaR |
+|---|---|---|---|---|
+| `min_cvar` | **93.6%** | 7.13% | 7.03% | 2.11% |
+| `min_var` | 18.4% | 6.97% | 6.95% | 2.08% |
+| `risk_parity` | 5.7% | 6.79% | 6.79% | 2.36% |
+| `igual_peso` | 0.0% | 7.67% | 7.67% | 3.24% |
+
+**The negative result gets stronger.** `min_cvar` turns over five times more than `min_var`,
+costs 10 bp a year against 2, and its gross return edge (+0.16 pp) evaporates to **+0.01 pp** at
+20 bp — while still delivering 1.6% *worse* realised CVaR. Optimising the tail did not pay, and
+it costs more to run.
+
+---
+
 ## The negative result
 
 **CVaR optimization did not reduce realized tail risk.**
@@ -296,8 +366,8 @@ exactly where the data is thinnest.
   0.05/day (12.6 jumps per year) as a declared modeling choice, with sensitivity reported in
   `merton.sensibilidad_lambda`. Closing it would require the sixth sample cumulant, which is
   noise.
-- **No transaction costs.** With monthly rebalancing and stable portfolios the effect would be
-  modest, but it is not measured.
+- **Transaction costs are now measured** (Act 4) but only as a linear turnover charge. Market
+  impact, bid-ask asymmetry and borrowing costs are not modelled.
 - **GARCH is not included.** Refitting it inside the walk-forward means ~3,900 daily estimations
   per asset with their convergence failures. EWMA is its non-estimated cousin and captures most
   of the clustering; FHS uses it as a filter. This is the natural extension.
@@ -379,7 +449,7 @@ attribution. Run `make report` for the diagnostic.
 ```bash
 pip install -e ".[data]"       # omit [data] to run fully offline from the cached CSV
 python tests/test_core.py      # 25 validation checks, ~4 min
-python -m src.backtest         # walk-forward, 12 models × 4 portfolios, ~12 min
+python -m src.backtest         # walk-forward, 13 models × 4 portfolios, ~14 min
 python -m src.basel            # capital traffic light and ES backtest
 python -m src.plots            # figures
 python -m src.diario --sembrar # daily run with persistent state (shadow mode)
@@ -404,7 +474,7 @@ versioned (15 MB of derived output), so run the backtest first.
 src/data.py       ingestion and cache
 src/merton.py     calibration, cumulants, simulation, joint scenarios
 src/optimize.py   min-CVaR (LP), Markowitz (QP), risk parity
-src/risk.py       registry of the 12 VaR/ES models under one signature
+src/risk.py       registry of the 13 VaR/ES models under one signature
 src/backtest.py   walk-forward, Kupiec, Christoffersen
 src/basel.py      capital traffic light and Acerbi–Székely
 src/diario.py     daily run with persistent state

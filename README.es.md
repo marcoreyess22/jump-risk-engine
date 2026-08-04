@@ -8,7 +8,7 @@
 
 **Menos. Ese es el problema.**
 
-Auditoría de **12 especificaciones de VaR/ES × 4 carteras** sobre 8 clases de activo y 3,923
+Auditoría de **13 especificaciones de VaR/ES × 4 carteras** sobre 8 clases de activo y 3,923
 días out-of-sample (2011-2026), con validación de Kupiec, Christoffersen, Acerbi-Székely y el
 semáforo de capital de Basilea.
 
@@ -19,25 +19,29 @@ semáforo de capital de Basilea.
 | | |
 |---|---|
 | **El VaR gaussiano produce 2.06× las excepciones esperadas** | Reprueba Kupiec, cobertura condicional y el backtest de ES en las 4 carteras |
-| **El VaR con saltos produce 0.97×** | La mejor calibración de frecuencia de las diez |
+| **El VaR con saltos produce 0.97×** | La mejor calibración de frecuencia de las trece |
 | **39 de 40 combinaciones reprueban independencia** | Tras una excepción la probabilidad se multiplica por 16 |
-| **Ningún modelo acierta frecuencia y momento a la vez** | El mejor en frecuencia es casi el peor en agrupamiento, y viceversa |
+| **Al 99% ningún modelo acierta los tres ejes — al 95% dos sí** | El veredicto al 99% era un artefacto de potencia: 39 excepciones esperadas no resuelven lo que 196 hacen evidente |
 | **El modelo que reprueba todo cuesta 18.4% MENOS capital** | El castigo del semáforo no compensa lo que se ahorra subestimando |
 | **Optimizar CVaR no redujo la cola realizada** | Asigna 10 pp distinto que mínima varianza, con +0.1% de CVaR |
 
-**Recomendación.** Adoptar **`mc_merton`** como especificación de riesgo. De las diez es la
-única que acierta a la vez la frecuencia de las pérdidas extremas (0.96×, la mejor calibrada) y
-su magnitud (pasa el backtest de Expected Shortfall en las 4 carteras) — y la magnitud es lo que
-mide el marco vigente, ya que el IMA de FRTB se construye sobre Expected Shortfall y no sobre
-VaR.
+**Recomendación — y depende del nivel, que es justamente el hallazgo.**
 
-Su defecto es real y hay que decirlo: **no modela agrupamiento de volatilidad**, así que sus
-excepciones se apelmazan en crisis. Esa extensión ya está construida — ver
-[Acto 3](#acto-3--cerrar-el-hueco-que-el-proyecto-dejó-abierto). `mc_merton_ewma` reduce el
-agrupamiento a la mitad y conserva el ES perfecto con un multiplicador de capital menor, pero se
-vuelve sistemáticamente conservadora en frecuencia (0.72× contra 0.94×). Empatan a 8/16 y
-ninguna domina: **ningún modelo del conjunto resuelve los tres ejes.** Elige `mc_merton` si
-pesa más la precisión de frecuencia, `mc_merton_ewma` si pesa el agrupamiento.
+**Al 99%**, adoptar **`mc_merton`**. Es la única especificación que acierta a la vez la
+frecuencia de las pérdidas extremas (0.94×, la mejor calibrada) y su magnitud (pasa el backtest
+de Expected Shortfall en las 4 carteras) — y la magnitud es lo que mide el marco vigente, ya que
+el IMA de FRTB se construye sobre Expected Shortfall y no sobre VaR. Sus excepciones siguen
+apelmazándose en crisis, y a este nivel nada lo arregla.
+
+**Al 95%**, adoptar **`fhs` o `garch_t`**. Ambas sacan 12 de 12: frecuencia, momento y magnitud,
+en las cuatro carteras. Y `mc_merton` se desploma a 2 de 12, porque un modelo afinado para el 1%
+extremo sobreestima el hombro de la distribución.
+
+**Ningún modelo es correcto — lo son en un nivel.** Elegir especificación sin fijar antes el
+nivel de confianza es elegir mal. Ver
+[Acto 4](#acto-4--el-nivel-de-confianza-decidía-la-conclusión), que además muestra que el
+veredicto anterior de "nada arregla el momento" era un artefacto de potencia estadística y no
+una propiedad de los modelos.
 
 Y no confiar en el semáforo de Basilea como único criterio de aprobación: sobre estos datos
 **premia económicamente a los modelos que reprueba**. La conclusión práctica no es afinar el
@@ -68,7 +72,7 @@ cuenta no altera ninguna marginal — se gana dependencia de cola sin recalibrar
 diario invalidaría la medición: el VaR estaría midiendo una cartera que nunca existió un día
 completo.
 
-**Diez especificaciones.** Cinco incondicionales sin volatilidad variable (`historico`,
+**Trece especificaciones.** Cinco incondicionales sin volatilidad variable (`historico`,
 `normal`, `mc_gbm`, `mc_merton`, `mc_merton_idio`), tres con colas no gaussianas pero varianza
 plana (`t_student`, `cornish_fisher`, `evt`) y dos con volatilidad condicional (`ewma`, `fhs`).
 Todas se registran bajo una firma única `(retornos, pesos, nivel, rng) → (VaR, ES)`, de modo que
@@ -93,7 +97,7 @@ este informe son las posteriores.
 
 ## Acto 1 — el diagnóstico
 
-*(Cinco especificaciones incondicionales. El Acto 2 amplía a diez y matiza la conclusión.)*
+*(Cinco especificaciones incondicionales. El Acto 2 amplía el conjunto y matiza la conclusión.)*
 
 ### 1. Los saltos corrigen la frecuencia de excepciones
 
@@ -273,6 +277,70 @@ el registro, documentado, en lugar de desaparecer sin ruido.
 
 ---
 
+## Acto 4 — el nivel de confianza decidía la conclusión
+
+El Acto 3 cerró con que el hueco *se estrechó pero no se cerró*: ningún modelo acertaba
+frecuencia, momento y magnitud a la vez. Esa conclusión resultó ser **un artefacto de potencia
+estadística**, no un hallazgo sobre los modelos.
+
+Al 99% hay ~39 excepciones esperadas en 3,923 días. Al 95% hay **196 — cinco veces más**. Correr
+el mismo backtest a ese nivel no cambia ningún modelo; cambia lo que los tests pueden ver.
+
+| | 99% | 95% |
+|---|---|---|
+| Ancho medio del IC bootstrap de la razón | 0.94 | **0.38** |
+| Independencia: modelos **condicionales** | 2 de 20 | **18 de 20** |
+| Independencia: modelos **incondicionales** | 0 de 32 | **0 de 32** |
+| Persistencia de los condicionales | 3.4 – 10.5 | **1.3 – 1.4** |
+| Persistencia de los incondicionales | 6.3 – 29.3 | 2.5 – 2.7 |
+
+La separación al 95% es total: **pasan independencia los cinco modelos con volatilidad
+condicional y ninguno de los ocho sin ella.** Y su persistencia cae a 1.3, que es esencialmente
+1.0 — agrupamiento eliminado.
+
+La pregunta que abría el Acto 2 —*¿condicionar por volatilidad arregla la independencia?*— tiene
+respuesta inequívoca. Al 99% el test simplemente no tenía potencia para verla.
+
+**Dos modelos aciertan los tres ejes al 95%:** `fhs` y `garch_t`, ambos 12 de 12 sobre las
+cuatro carteras. Y el orden se invierte respecto al 99%: `mc_merton`, el mejor calibrado en la
+cola extrema, cae a 2 de 12 porque sobreestima el hombro de la distribución.
+
+**Ningún modelo es correcto: lo son en un nivel u otro.** Merton describe bien el 1% extremo y
+mal el 5%; los condicionales, al revés. Elegir modelo sin fijar antes el nivel es elegir mal.
+
+### GARCH(1,1)-t
+
+El proyecto había excluido GARCH por costo — reajustarlo son ~15,700 estimaciones. Se resolvió
+resolviendo la recursión de varianza con un **filtro IIR** en lugar de un bucle: la recursión es
+exactamente un filtro de un polo y `lfilter` la evalúa en C. De 51 ms por ajuste a 3.5 ms, y de
+9.7 minutos a 1.2 en todo el walk-forward.
+
+Frente a EWMA, la persistencia se **estima** en vez de fijarse en 0.94, y las colas son t en vez
+de gaussianas — que era lo que hundía a `ewma` en frecuencia (2.09×) pese a su buen
+comportamiento temporal. `garch_t` da 1.02× al 95% con 12 de 12.
+
+Está implementado a mano en lugar de añadir una dependencia, lo que obliga a demostrar que
+funciona: se valida por **recuperación de parámetros** sobre series simuladas desde valores
+conocidos (persistencia 0.970 → 0.964).
+
+### Costos de transacción
+
+Medidos como media suma de |Δw| en el día de rebalanceo, sobre 15.6 años:
+
+| cartera | rotación anual | bruto | neto 10 pb | CVaR |
+|---|---|---|---|---|
+| `min_cvar` | **93.6%** | 7.13% | 7.03% | 2.11% |
+| `min_var` | 18.4% | 6.97% | 6.95% | 2.08% |
+| `risk_parity` | 5.7% | 6.79% | 6.79% | 2.36% |
+| `igual_peso` | 0.0% | 7.67% | 7.67% | 3.24% |
+
+**El resultado negativo se refuerza.** `min_cvar` rota cinco veces más que `min_var`, cuesta 10
+pb anuales frente a 2, y su ventaja bruta de retorno (+0.16 pp) se evapora a **+0.01 pp** con 20
+pb — mientras sigue entregando 1.6% *peor* CVaR realizado. Optimizar la cola no solo no pagó:
+además cuesta más de operar.
+
+---
+
 ## El resultado negativo
 
 **Optimizar CVaR no redujo el riesgo de cola realizado.**
@@ -309,8 +377,8 @@ incorrecta al contrastarla, y quedó descartada.*
   Se fija en 0.05/día (12.6 saltos/año) como decisión de modelado declarada, con sensibilidad
   reportada en `merton.sensibilidad_lambda`. Cerrarla exigiría el sexto cumulante muestral, que
   es ruido.
-- **Sin costos de transacción.** Con rebalanceo mensual y carteras estables el efecto sería
-  modesto, pero no está medido.
+- **Los costos de transacción ya están medidos** (Acto 4), pero solo como cargo lineal sobre la
+  rotación. Impacto de mercado, asimetría bid-ask y costos de préstamo no se modelan.
 - **GARCH no está incluido.** Reajustarlo dentro del walk-forward son ~3,900 estimaciones
   diarias por activo con sus fallos de convergencia. EWMA es su primo no estimado y captura la
   mayor parte del agrupamiento; FHS lo usa como filtro. Es la extensión natural.
@@ -390,7 +458,7 @@ atribución causal. Corre `make report` para verlo.
 ```bash
 pip install -e ".[data]"       # sin [data] corre 100% offline desde el CSV cacheado
 python tests/test_core.py      # 25 checks de validación, ~4 min
-python -m src.backtest         # walk-forward, 12 modelos × 4 carteras, ~12 min
+python -m src.backtest         # walk-forward, 13 modelos × 4 carteras, ~14 min
 python -m src.basel            # semáforo de capital y backtest de ES
 python -m src.plots            # figuras
 python -m src.diario --sembrar # corrida diaria con estado (modo sombra)
@@ -413,7 +481,7 @@ importan:
 src/data.py       ingesta y caché
 src/merton.py     calibración, cumulantes, simulación, escenarios conjuntos
 src/optimize.py   mín-CVaR (LP), Markowitz (QP), risk parity
-src/risk.py       registro de los 12 modelos VaR/ES con firma única
+src/risk.py       registro de los 13 modelos VaR/ES con firma única
 src/backtest.py   walk-forward, Kupiec, Christoffersen
 src/basel.py      semáforo de capital y Acerbi-Székely
 src/diario.py     corrida diaria con estado persistente

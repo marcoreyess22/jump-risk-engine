@@ -13,7 +13,7 @@ CSV = Path(__file__).resolve().parents[1] / "data" / "walkforward.csv"
 NIVEL = 0.99
 ACTO1 = ["historico", "normal", "mc_gbm", "mc_merton", "mc_merton_idio"]
 ORDEN = ACTO1 + ["t_student", "cornish_fisher", "evt", "ewma", "fhs",
-                 "mc_merton_ewma", "fhs_merton"]
+                 "mc_merton_ewma", "fhs_merton", "garch_t"]
 
 # Un color por modelo. Los cinco del Acto 2 caían todos en el mismo verde de
 # reserva, así que en las figuras 5 y 6 —las que sostienen las conclusiones—
@@ -23,7 +23,9 @@ COLOR = {"historico": "#555555", "normal": "#d62728", "mc_gbm": "#ff7f0e",
          "t_student": "#8c564b", "cornish_fisher": "#e377c2",
          "evt": "#17becf", "ewma": "#2ca02c", "fhs": "#bcbd22",
          # Acto 3: escala condicional + cola paramétrica.
-         "mc_merton_ewma": "#0b3d5c", "fhs_merton": "#7f5f00"}
+         "mc_merton_ewma": "#0b3d5c", "fhs_merton": "#7f5f00",
+         # Acto 4: persistencia estimada en vez de fijada.
+         "garch_t": "#00429d"}
 
 
 def cargar():
